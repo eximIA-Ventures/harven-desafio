@@ -117,7 +117,8 @@ export default function LoginPage() {
         return;
       }
 
-      router.push(data.redirectTo);
+      // New registration → onboarding
+      router.push("/onboarding");
     } catch {
       setError("Erro de conexão");
     } finally {
