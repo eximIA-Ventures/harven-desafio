@@ -10,6 +10,7 @@ import {
   Shield,
   Flame,
   Zap,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -552,11 +553,12 @@ export default function MinhaCarteiraPage() {
                       <div className="min-w-0">
                         <p
                           className={cn(
-                            "text-sm font-mono font-semibold tracking-wide",
+                            "text-sm font-mono font-semibold tracking-wide inline-flex items-center gap-1",
                             isSelected ? "text-[#1A1A1A]" : "text-[#5C5C5C]"
                           )}
                         >
                           {stock.ticker}
+                          <ExternalLink className="h-2.5 w-2.5 text-[#D9D7D2]" />
                         </p>
                         <p className="text-[10px] text-[#9CA3AF] truncate capitalize">
                           {stock.company.toLowerCase()}

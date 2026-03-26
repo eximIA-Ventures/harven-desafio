@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { X, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { X, TrendingUp, TrendingDown, Minus, ExternalLink } from "lucide-react";
 import { useEffect } from "react";
 
 type PortfolioData = {
@@ -234,8 +234,9 @@ export function PortfolioModal({
                                 (e.target as HTMLImageElement).style.display = "none";
                               }}
                             />
-                            <span className="text-sm font-mono font-semibold text-[#1A1A1A] tracking-wide">
+                            <span className="text-sm font-mono font-semibold text-[#1A1A1A] tracking-wide inline-flex items-center gap-1">
                               {item.ticker}
+                              <ExternalLink className="h-2.5 w-2.5 text-[#D9D7D2]" />
                             </span>
                           </a>
                         </div>
