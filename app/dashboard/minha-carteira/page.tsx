@@ -11,6 +11,7 @@ import {
   Flame,
   Zap,
   ExternalLink,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +152,7 @@ export default function MinhaCarteiraPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [cycleLabel, setCycleLabel] = useState<string | null>(null);
+  const [cycleDeadline, setCycleDeadline] = useState<string | null>(null);
   const [existingPortfolio, setExistingPortfolio] = useState(false);
 
   // Fetch IBOV composition + existing portfolio
@@ -166,7 +168,10 @@ export default function MinhaCarteiraPage() {
     fetch("/api/portfolio")
       .then((res) => res.json())
       .then((data) => {
-        if (data.cycle) setCycleLabel(data.cycle.label);
+        if (data.cycle) {
+          setCycleLabel(data.cycle.label);
+          setCycleDeadline(data.cycle.deadline);
+        }
         if (data.portfolio) {
           setSelectedModel(data.portfolio.allocationModel);
           setSelectedStocks(data.portfolio.stocks);
@@ -262,6 +267,52 @@ export default function MinhaCarteiraPage() {
           </div>
         </div>
       </div>
+
+      {/* Deadline banner */}
+      {cycleDeadline && (() => {
+        const deadline = new Date(cycleDeadline);
+        const now = new Date();
+        const diffMs = deadline.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays <= 0 || diffDays > 7) return null;
+
+        const urgency = diffDays <= 2;
+        return (
+          <div
+            className={cn(
+              "mb-6 rounded-2xl border p-4 flex items-center gap-3",
+              urgency
+                ? "border-[#DC2626]/20 bg-[#DC2626]/[0.04]"
+                : "border-[#D97706]/20 bg-[#D97706]/[0.04]"
+            )}
+          >
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-lg shrink-0",
+                urgency ? "bg-[#DC2626]/10" : "bg-[#D97706]/10"
+              )}
+            >
+              <Clock
+                className={cn(
+                  "h-4 w-4",
+                  urgency ? "text-[#DC2626]" : "text-[#D97706]"
+                )}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#1A1A1A]">
+                {diffDays === 1
+                  ? "Último dia para enviar!"
+                  : `Faltam ${diffDays} dias para o fechamento`}
+              </p>
+              <p className="text-[11px] text-[#9CA3AF]">
+                Prazo: {deadline.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })} às 18h
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Existing portfolio banner */}
       {existingPortfolio && (

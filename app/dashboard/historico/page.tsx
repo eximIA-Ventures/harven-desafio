@@ -1,19 +1,19 @@
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { formatPercent } from "@/lib/utils";
 import {
   History,
   TrendingUp,
   TrendingDown,
   Minus,
-  Trophy,
   Shield,
   Flame,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PerformanceChart } from "@/components/desafio/performance-chart";
 
 const modelConfig: Record<
   number,
@@ -53,6 +53,11 @@ function ReturnDisplay({ value, size = "sm" }: { value: number | null; size?: "s
   );
 }
 
+const SHORT_MONTHS = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+  "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+];
+
 export default async function HistoricoPage() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -66,13 +71,16 @@ export default async function HistoricoPage() {
     },
   });
 
-  // Only show liquidated cycles
+  // Only show liquidated cycles, sorted oldest → newest for chart
   const liquidated = portfolios
     .filter((p) => p.cycle.status === "liquidated" && p.returnMonth !== null)
     .sort((a, b) => {
-      if (b.cycle.year !== a.cycle.year) return b.cycle.year - a.cycle.year;
-      return b.cycle.month - a.cycle.month;
+      if (a.cycle.year !== b.cycle.year) return a.cycle.year - b.cycle.year;
+      return a.cycle.month - b.cycle.month;
     });
+
+  // For display: newest first
+  const liquidatedDesc = [...liquidated].reverse();
 
   // Get total participants per cycle for rank context
   const cycleIds = [...new Set(liquidated.map((p) => p.cycleId))];
@@ -84,7 +92,28 @@ export default async function HistoricoPage() {
     totalPerCycle[cid] = all.length;
   }
 
-  const latestAccum = liquidated[0]?.returnAccum ?? null;
+  const latestAccum = liquidatedDesc[0]?.returnAccum ?? null;
+
+  // Build chart data (accumulated returns over time)
+  let userAccum = 0;
+  let ibovAccum = 0;
+  const chartData = liquidated.map((p) => {
+    userAccum += p.returnMonth ?? 0;
+    ibovAccum += p.cycle.ibovReturn ?? 0;
+    return {
+      label: `${SHORT_MONTHS[p.cycle.month - 1]}/${String(p.cycle.year).slice(2)}`,
+      userReturn: userAccum,
+      ibovReturn: ibovAccum,
+    };
+  });
+
+  // Count months beating IBOV
+  const monthsBeatIbov = liquidated.filter(
+    (p) =>
+      p.returnMonth !== null &&
+      p.cycle.ibovReturn !== null &&
+      p.returnMonth > p.cycle.ibovReturn
+  ).length;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -112,8 +141,8 @@ export default async function HistoricoPage() {
         </div>
       ) : (
         <>
-          {/* Summary card */}
-          <div className="mb-6 grid grid-cols-2 gap-3">
+          {/* Summary cards */}
+          <div className="mb-6 grid grid-cols-3 gap-3">
             <div className="rounded-2xl border border-[#E8E6E1] bg-white p-5">
               <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider mb-2">
                 Retorno acumulado
@@ -122,17 +151,31 @@ export default async function HistoricoPage() {
             </div>
             <div className="rounded-2xl border border-[#E8E6E1] bg-white p-5">
               <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider mb-2">
-                Ciclos participados
+                Ciclos
               </p>
               <p className="text-lg font-heading font-bold text-[#1A1A1A]">
                 {liquidated.length}
               </p>
             </div>
+            <div className="rounded-2xl border border-[#E8E6E1] bg-white p-5">
+              <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider mb-2">
+                Bateu IBOV
+              </p>
+              <p className="text-lg font-heading font-bold text-[#1A1A1A]">
+                {monthsBeatIbov}
+                <span className="text-xs text-[#9CA3AF] font-normal ml-0.5">
+                  /{liquidated.length}
+                </span>
+              </p>
+            </div>
           </div>
+
+          {/* Performance chart */}
+          {chartData.length >= 2 && <PerformanceChart data={chartData} />}
 
           {/* Cycles timeline */}
           <div className="space-y-3">
-            {liquidated.map((p) => {
+            {liquidatedDesc.map((p) => {
               const model = modelConfig[p.allocationModel];
               const ModelIcon = model?.icon ?? Shield;
               const vsIbov =
