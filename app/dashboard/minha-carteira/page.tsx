@@ -533,30 +533,36 @@ export default function MinhaCarteiraPage() {
                       )}
                     </div>
 
-                    {/* Logo */}
-                    <img
-                      src={stock.logo}
-                      alt={stock.ticker}
-                      className="h-8 w-8 rounded-lg object-contain bg-white border border-[#E8E6E1] p-0.5 shrink-0"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-
-                    {/* Ticker + Company */}
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={cn(
-                          "text-sm font-mono font-semibold tracking-wide",
-                          isSelected ? "text-[#1A1A1A]" : "text-[#5C5C5C]"
-                        )}
-                      >
-                        {stock.ticker}
-                      </p>
-                      <p className="text-[10px] text-[#9CA3AF] truncate capitalize">
-                        {stock.company.toLowerCase()}
-                      </p>
-                    </div>
+                    {/* Logo + Ticker + Company — link to stock info */}
+                    <a
+                      href={`https://investidor10.com.br/acoes/${stock.ticker.toLowerCase()}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-70 transition-opacity"
+                    >
+                      <img
+                        src={stock.logo}
+                        alt={stock.ticker}
+                        className="h-8 w-8 rounded-lg object-contain bg-white border border-[#E8E6E1] p-0.5 shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <p
+                          className={cn(
+                            "text-sm font-mono font-semibold tracking-wide",
+                            isSelected ? "text-[#1A1A1A]" : "text-[#5C5C5C]"
+                          )}
+                        >
+                          {stock.ticker}
+                        </p>
+                        <p className="text-[10px] text-[#9CA3AF] truncate capitalize">
+                          {stock.company.toLowerCase()}
+                        </p>
+                      </div>
+                    </a>
 
                     {/* Price */}
                     <div className="text-right shrink-0">

@@ -220,17 +220,24 @@ export function PortfolioModal({
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
-                          <img
-                            src={`https://icons.brapi.dev/icons/${item.ticker}.svg`}
-                            alt={item.ticker}
-                            className="h-6 w-6 rounded-md object-contain bg-white border border-[#E8E6E1] p-0.5"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = "none";
-                            }}
-                          />
-                          <span className="text-sm font-mono font-semibold text-[#1A1A1A] tracking-wide">
-                            {item.ticker}
-                          </span>
+                          <a
+                            href={`https://investidor10.com.br/acoes/${item.ticker.toLowerCase()}/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+                          >
+                            <img
+                              src={`https://icons.brapi.dev/icons/${item.ticker}.svg`}
+                              alt={item.ticker}
+                              className="h-6 w-6 rounded-md object-contain bg-white border border-[#E8E6E1] p-0.5"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                            <span className="text-sm font-mono font-semibold text-[#1A1A1A] tracking-wide">
+                              {item.ticker}
+                            </span>
+                          </a>
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right text-xs font-mono tabular-nums text-[#9CA3AF]">
