@@ -369,9 +369,9 @@ export default function MinhaCarteiraPage() {
 
         <p className="mb-5 text-sm text-[#5C5C5C] leading-relaxed">
           Cada modelo representa um perfil de risco diferente. A distribuição é
-          entre Renda Fixa (CDI), Ouro (XAU), Dólar (USD), Cripto (BTC), EUA
-          (S&P 500) e China (SSE). Escolha o que mais combina com sua
-          estratégia.
+          entre Ações BR (suas escolhas), Renda Fixa (CDI), Ouro (XAU), Dólar
+          (USD), Cripto (BTC) e EUA (S&P 500). Escolha o que mais combina com
+          sua estratégia.
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -387,7 +387,7 @@ export default function MinhaCarteiraPage() {
                   setSubmitMessage("");
                 }}
                 className={cn(
-                  "rounded-xl border-2 p-5 text-left transition-all cursor-pointer",
+                  "rounded-xl border-2 p-5 text-left transition-all cursor-pointer flex flex-col",
                   isSelected
                     ? `${model.borderColor} ${model.bgColor} shadow-sm`
                     : "border-[#E8E6E1] bg-white hover:border-[#D9D7D2]"
@@ -414,7 +414,7 @@ export default function MinhaCarteiraPage() {
                 </div>
 
                 {/* Legend */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 mt-auto">
                   {model.composition.map((c) => (
                     <div
                       key={c.label}
