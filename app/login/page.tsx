@@ -7,33 +7,44 @@ import {
   ArrowRight,
   AlertCircle,
   Hash,
+  Phone,
   User,
   Mail,
   Lock,
   ChevronLeft,
   GraduationCap,
   CheckCircle2,
+  X,
 } from "lucide-react";
 
-type Step = "cpf" | "register" | "welcome" | "admin";
+type Step = "login" | "register" | "welcome" | "admin";
+type LoginMode = "cpf" | "phone";
 
 function maskCpf(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (digits.length <= 9)
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
-function rawCpf(value: string): string {
+function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function rawDigits(value: string): string {
   return value.replace(/\D/g, "");
 }
 
 export default function LoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("cpf");
+  const [step, setStep] = useState<Step>("login");
+  const [loginMode, setLoginMode] = useState<LoginMode>("cpf");
   const [cpf, setCpf] = useState("");
+  const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [curso, setCurso] = useState("");
@@ -43,6 +54,8 @@ export default function LoginPage() {
   const [welcomeName, setWelcomeName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -53,22 +66,36 @@ export default function LoginPage() {
     []
   );
 
-  async function handleCpfSubmit(e: React.FormEvent) {
+  const handlePhoneChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setPhone(maskPhone(e.target.value));
+    },
+    []
+  );
+
+  async function handleLoginSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    const digits = rawCpf(cpf);
-    if (digits.length !== 11) {
+    const isCpf = loginMode === "cpf";
+    const digits = rawDigits(isCpf ? cpf : phone);
+
+    if (isCpf && digits.length !== 11) {
       setError("Digite os 11 dígitos do CPF");
+      return;
+    }
+    if (!isCpf && (digits.length < 10 || digits.length > 11)) {
+      setError("Digite um número de celular válido");
       return;
     }
 
     setLoading(true);
     try {
+      const payload = isCpf ? { cpf: digits } : { phone: digits };
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cpf: digits }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
 
@@ -97,18 +124,27 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const payload: Record<string, unknown> = {
+        name,
+        email: email || undefined,
+        curso: curso || undefined,
+        anoIngresso: anoIngresso ? parseInt(anoIngresso) : undefined,
+        semestre: semestre ? parseInt(semestre) : undefined,
+        sala: sala || undefined,
+      };
+
+      if (loginMode === "cpf") {
+        payload.cpf = rawDigits(cpf);
+        if (rawDigits(phone)) payload.phone = rawDigits(phone);
+      } else {
+        payload.phone = rawDigits(phone);
+        if (rawDigits(cpf)) payload.cpf = rawDigits(cpf);
+      }
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cpf: rawCpf(cpf),
-          name,
-          email: email || undefined,
-          curso: curso || undefined,
-          anoIngresso: anoIngresso ? parseInt(anoIngresso) : undefined,
-          semestre: semestre ? parseInt(semestre) : undefined,
-          sala: sala || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
 
@@ -117,8 +153,10 @@ export default function LoginPage() {
         return;
       }
 
-      // New registration → onboarding
-      router.push("/onboarding");
+      if (data.step === "done") {
+        setStep("welcome");
+        setTimeout(() => router.push(data.redirectTo), 1500);
+      }
     } catch {
       setError("Erro de conexão");
     } finally {
@@ -184,45 +222,95 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-2xl border border-[#E8E6E1] bg-white p-8 shadow-[0_4px_30px_rgba(0,0,0,0.04)]">
-          {/* === CPF === */}
-          {step === "cpf" && (
+          {/* === LOGIN === */}
+          {step === "login" && (
             <>
               <h1 className="font-heading text-xl font-semibold text-[#1A1A1A] text-center">
                 Entrar
               </h1>
               <p className="mt-1.5 text-center text-sm text-[#9CA3AF]">
-                Digite seu CPF para acessar ou se cadastrar
+                Acesse ou cadastre-se para participar
               </p>
 
-              <form onSubmit={handleCpfSubmit} className="mt-6 space-y-4">
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
-                    CPF
-                  </label>
-                  <div className="relative mt-1.5">
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={cpf}
-                      onChange={handleCpfChange}
-                      required
-                      autoFocus
-                      maxLength={14}
-                      className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
-                      placeholder="000.000.000-00"
-                    />
+              {/* Tabs CPF / Celular */}
+              <div className="mt-5 flex rounded-xl bg-[#F5F4F0] p-1">
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("cpf"); setError(""); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-all cursor-pointer ${
+                    loginMode === "cpf"
+                      ? "bg-white text-[#1A1A1A] shadow-sm"
+                      : "text-[#9CA3AF] hover:text-[#5C5C5C]"
+                  }`}
+                >
+                  <Hash className="h-3.5 w-3.5" />
+                  CPF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginMode("phone"); setError(""); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-all cursor-pointer ${
+                    loginMode === "phone"
+                      ? "bg-white text-[#1A1A1A] shadow-sm"
+                      : "text-[#9CA3AF] hover:text-[#5C5C5C]"
+                  }`}
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  Celular
+                </button>
+              </div>
+
+              <form onSubmit={handleLoginSubmit} className="mt-5 space-y-4">
+                {loginMode === "cpf" ? (
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
+                      CPF
+                    </label>
+                    <div className="relative mt-1.5">
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={cpf}
+                        onChange={handleCpfChange}
+                        required
+                        autoFocus
+                        maxLength={14}
+                        className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
+                        placeholder="000.000.000-00"
+                      />
+                    </div>
                   </div>
-                  <p className="mt-1.5 text-[10px] text-[#D9D7D2]">
-                    Usado apenas para identificação no desafio
-                  </p>
-                </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
+                      Celular
+                    </label>
+                    <div className="relative mt-1.5">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                      <input
+                        type="text"
+                        inputMode="tel"
+                        value={phone}
+                        onChange={handlePhoneChange}
+                        required
+                        autoFocus
+                        maxLength={15}
+                        className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {error && <ErrorMsg message={error} />}
 
                 <button
                   type="submit"
-                  disabled={loading || rawCpf(cpf).length !== 11}
+                  disabled={
+                    loading ||
+                    (loginMode === "cpf" ? rawDigits(cpf).length !== 11 : rawDigits(phone).length < 10)
+                  }
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A1A1A] px-6 py-3 text-sm font-medium text-white transition-all hover:bg-[#333] hover:shadow-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {loading ? <Spinner /> : (
@@ -253,7 +341,7 @@ export default function LoginPage() {
             <>
               <button
                 onClick={() => {
-                  setStep("cpf");
+                  setStep("login");
                   setError("");
                 }}
                 className="mb-4 inline-flex items-center gap-1 text-xs text-[#9CA3AF] hover:text-[#5C5C5C] transition-colors cursor-pointer"
@@ -270,16 +358,20 @@ export default function LoginPage() {
               </p>
 
               <form onSubmit={handleRegister} className="mt-6 space-y-4">
-                {/* CPF (readonly) */}
+                {/* Identifier (readonly) */}
                 <div>
                   <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
-                    CPF
+                    {loginMode === "cpf" ? "CPF" : "Celular"}
                   </label>
                   <div className="relative mt-1.5">
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                    {loginMode === "cpf" ? (
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                    ) : (
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                    )}
                     <input
                       type="text"
-                      value={cpf}
+                      value={loginMode === "cpf" ? cpf : phone}
                       disabled
                       className="w-full rounded-xl border border-[#E8E6E1] bg-[#F5F4F0] pl-11 pr-4 py-3 text-sm text-[#9CA3AF] font-mono tracking-wide cursor-not-allowed"
                     />
@@ -304,6 +396,51 @@ export default function LoginPage() {
                     />
                   </div>
                 </div>
+
+                {/* Secondary identifier (optional) */}
+                {loginMode === "phone" ? (
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
+                      CPF
+                      <span className="ml-1 normal-case tracking-normal text-[#D9D7D2]">
+                        (opcional)
+                      </span>
+                    </label>
+                    <div className="relative mt-1.5">
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={cpf}
+                        onChange={handleCpfChange}
+                        maxLength={14}
+                        className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
+                        placeholder="000.000.000-00"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
+                      Celular
+                      <span className="ml-1 normal-case tracking-normal text-[#D9D7D2]">
+                        (opcional)
+                      </span>
+                    </label>
+                    <div className="relative mt-1.5">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
+                      <input
+                        type="text"
+                        inputMode="tel"
+                        value={phone}
+                        onChange={handlePhoneChange}
+                        maxLength={15}
+                        className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Curso */}
                 <div>
@@ -396,11 +533,31 @@ export default function LoginPage() {
                   </div>
                 </div>
 
+                {/* Terms */}
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[#E8E6E1] accent-[#1A1A1A] cursor-pointer"
+                  />
+                  <span className="text-xs text-[#9CA3AF] leading-relaxed group-hover:text-[#5C5C5C] transition-colors">
+                    Aceito os{" "}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setShowTerms(true); }}
+                      className="underline text-[#C6AD7C] hover:text-[#B59C6B] cursor-pointer"
+                    >
+                      termos de uso
+                    </button>
+                  </span>
+                </label>
+
                 {error && <ErrorMsg message={error} />}
 
                 <button
                   type="submit"
-                  disabled={loading || !name.trim() || !curso || !anoIngresso || !semestre || !sala.trim()}
+                  disabled={loading || !name.trim() || !curso || !anoIngresso || !semestre || !sala.trim() || !acceptedTerms}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A1A1A] px-6 py-3 text-sm font-medium text-white transition-all hover:bg-[#333] hover:shadow-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {loading ? <Spinner /> : (
@@ -440,7 +597,7 @@ export default function LoginPage() {
             <>
               <button
                 onClick={() => {
-                  setStep("cpf");
+                  setStep("login");
                   setError("");
                 }}
                 className="mb-4 inline-flex items-center gap-1 text-xs text-[#9CA3AF] hover:text-[#5C5C5C] transition-colors cursor-pointer"
@@ -515,6 +672,100 @@ export default function LoginPage() {
           Harven Finance · Harven Agribusiness School · Ribeirão Preto
         </p>
       </div>
+
+      {/* Terms Modal */}
+      {showTerms && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowTerms(false)}
+          />
+          <div className="relative w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border border-[#E8E6E1] bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-white border-b border-[#E8E6E1] px-6 py-4">
+              <h2 className="font-heading text-base font-semibold text-[#1A1A1A]">
+                Termos de Uso e Privacidade
+              </h2>
+              <button
+                onClick={() => setShowTerms(false)}
+                className="rounded-lg p-1.5 text-[#9CA3AF] hover:text-[#5C5C5C] hover:bg-[#F5F4F0] transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5 text-sm text-[#5C5C5C] leading-relaxed space-y-4">
+              <p className="font-medium text-[#1A1A1A]">
+                Harven Finance League — Desafio de Carteiras
+              </p>
+
+              <div>
+                <p className="font-medium text-[#1A1A1A] mb-1">1. Coleta de Dados</p>
+                <p>
+                  Coletamos os seguintes dados pessoais para viabilizar sua participação no
+                  Desafio de Carteiras: nome completo, CPF, número de celular, e-mail
+                  (opcional), curso, semestre, sala e ano de ingresso.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-medium text-[#1A1A1A] mb-1">2. Finalidade</p>
+                <p>
+                  Seus dados são utilizados exclusivamente para identificação e autenticação
+                  na plataforma do Desafio de Carteiras, uma atividade educacional da
+                  Harven Agribusiness School. O CPF e/ou celular servem como identificador
+                  único para acesso à sua conta.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-medium text-[#1A1A1A] mb-1">3. Compartilhamento</p>
+                <p>
+                  Seus dados pessoais não serão compartilhados, vendidos ou cedidos
+                  a terceiros, sob nenhuma circunstância. O acesso é restrito aos
+                  administradores da Harven Finance League.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-medium text-[#1A1A1A] mb-1">4. Armazenamento e Segurança</p>
+                <p>
+                  Os dados são armazenados em servidores seguros com criptografia.
+                  O CPF é parcialmente mascarado nas interfaces da plataforma
+                  (ex: ***.***. 123-45). Senhas administrativas são armazenadas
+                  com hash criptográfico (bcrypt).
+                </p>
+              </div>
+
+              <div>
+                <p className="font-medium text-[#1A1A1A] mb-1">5. Seus Direitos (LGPD)</p>
+                <p>
+                  Conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018), você
+                  tem direito a: acessar seus dados, solicitar correção, solicitar
+                  exclusão da sua conta e revogar o consentimento a qualquer momento.
+                  Para exercer esses direitos, entre em contato com o administrador
+                  da liga.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-medium text-[#1A1A1A] mb-1">6. Consentimento</p>
+                <p>
+                  Ao marcar a caixa &ldquo;Aceito os termos de uso&rdquo;, você declara
+                  estar ciente e de acordo com as condições acima descritas.
+                </p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 border-t border-[#E8E6E1] bg-[#FAFAF8] px-6 py-4">
+              <button
+                onClick={() => { setAcceptedTerms(true); setShowTerms(false); }}
+                className="w-full rounded-xl bg-[#1A1A1A] px-6 py-3 text-sm font-medium text-white hover:bg-[#333] transition-colors cursor-pointer"
+              >
+                Li e aceito os termos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

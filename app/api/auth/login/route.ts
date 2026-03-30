@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import {
   loginByCpf,
+  loginByPhone,
   registerParticipant,
   loginAdmin,
   getRedirectForRole,
   isValidCpf,
+  isValidPhone,
 } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { cpf, name, email, curso, anoIngresso, semestre, sala, password, flow } = body;
+    const { cpf, phone, name, email, curso, anoIngresso, semestre, sala, password, flow } = body;
 
     // --- Admin flow ---
     if (flow === "admin") {
@@ -35,11 +37,56 @@ export async function POST(request: Request) {
       });
     }
 
-    // --- Participant flow (CPF) ---
+    // --- Participant flow (Phone) ---
+    if (phone && !cpf) {
+      if (!isValidPhone(phone)) {
+        return NextResponse.json(
+          { error: "Número de celular inválido" },
+          { status: 400 }
+        );
+      }
 
+      // Login attempt
+      if (!name) {
+        const result = await loginByPhone(phone);
+
+        if (result === null) {
+          return NextResponse.json(
+            { error: "Conta inativa. Entre em contato com o professor." },
+            { status: 403 }
+          );
+        }
+
+        if (result.isNew) {
+          return NextResponse.json({ step: "register" });
+        }
+
+        return NextResponse.json({
+          step: "done",
+          redirectTo: getRedirectForRole(result.user),
+          userName: result.user.name,
+        });
+      }
+
+      // Registration via phone
+      if (!name.trim() || name.trim().length < 3) {
+        return NextResponse.json(
+          { error: "Nome completo é obrigatório" },
+          { status: 400 }
+        );
+      }
+
+      const user = await registerParticipant({ phone, name, email, curso, anoIngresso, semestre, sala });
+      return NextResponse.json({
+        step: "done",
+        redirectTo: getRedirectForRole(user),
+      });
+    }
+
+    // --- Participant flow (CPF) ---
     if (!cpf) {
       return NextResponse.json(
-        { error: "CPF é obrigatório" },
+        { error: "CPF ou celular é obrigatório" },
         { status: 400 }
       );
     }
@@ -73,7 +120,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // Step 2: Register
+    // Step 2: Register via CPF
     if (!name.trim() || name.trim().length < 3) {
       return NextResponse.json(
         { error: "Nome completo é obrigatório" },
@@ -81,7 +128,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await registerParticipant({ cpf, name, email, curso, anoIngresso, semestre, sala });
+    const user = await registerParticipant({ cpf, phone: phone || undefined, name, email, curso, anoIngresso, semestre, sala });
     return NextResponse.json({
       step: "done",
       redirectTo: getRedirectForRole(user),

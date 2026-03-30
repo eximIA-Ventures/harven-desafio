@@ -11,6 +11,7 @@ type Entry = {
   curso: string | null;
   sala: string | null;
   returnMonth: number | null;
+  allocationModel: number;
   allocationLabel: string;
   stocks: string[];
 };

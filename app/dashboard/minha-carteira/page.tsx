@@ -14,6 +14,7 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StockLogo } from "@/components/desafio/stock-logo";
 
 // --- Allocation Models ---
 
@@ -26,13 +27,13 @@ const allocationModels = [
     bgColor: "bg-blue-50",
     borderColor: "border-blue-200",
     description:
-      "Foco em renda fixa e preservação de capital. Ideal para quem prioriza segurança com exposição mínima a risco.",
+      "Foco em preservação de capital. Apenas 25% em ações — o restante protegido em renda fixa e ativos reais.",
     composition: [
-      { label: "Renda Fixa (CDI)", value: 70, color: "#3B82F6" },
+      { label: "Ações BR", value: 25, color: "#16A34A" },
+      { label: "Renda Fixa (CDI)", value: 50, color: "#3B82F6" },
       { label: "Ouro (XAU)", value: 10, color: "#F59E0B" },
       { label: "Dólar (USD)", value: 10, color: "#10B981" },
       { label: "Cripto (BTC)", value: 5, color: "#8B5CF6" },
-      { label: "EUA (S&P)", value: 5, color: "#EF4444" },
     ],
   },
   {
@@ -43,14 +44,14 @@ const allocationModels = [
     bgColor: "bg-emerald-50",
     borderColor: "border-emerald-200",
     description:
-      "Equilíbrio entre segurança e crescimento. Diversificação global com base sólida em renda fixa.",
+      "Equilíbrio entre ações e diversificação. 50% em ações com base sólida em renda fixa e mercado internacional.",
     composition: [
-      { label: "Renda Fixa (CDI)", value: 50, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 15, color: "#F59E0B" },
-      { label: "Dólar (USD)", value: 15, color: "#10B981" },
-      { label: "Cripto (BTC)", value: 10, color: "#8B5CF6" },
+      { label: "Ações BR", value: 50, color: "#16A34A" },
+      { label: "Renda Fixa (CDI)", value: 25, color: "#3B82F6" },
+      { label: "Ouro (XAU)", value: 10, color: "#F59E0B" },
+      { label: "Dólar (USD)", value: 5, color: "#10B981" },
+      { label: "Cripto (BTC)", value: 5, color: "#8B5CF6" },
       { label: "EUA (S&P)", value: 5, color: "#EF4444" },
-      { label: "China (SSE)", value: 5, color: "#EC4899" },
     ],
   },
   {
@@ -61,14 +62,13 @@ const allocationModels = [
     bgColor: "bg-orange-50",
     borderColor: "border-orange-200",
     description:
-      "Maior exposição a ativos de risco em busca de retornos superiores. Para quem aceita volatilidade.",
+      "Alta exposição a ações (75%). Para quem aceita volatilidade em busca de retornos superiores.",
     composition: [
-      { label: "Renda Fixa (CDI)", value: 30, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 20, color: "#F59E0B" },
-      { label: "Dólar (USD)", value: 20, color: "#10B981" },
-      { label: "Cripto (BTC)", value: 15, color: "#8B5CF6" },
-      { label: "EUA (S&P)", value: 10, color: "#EF4444" },
-      { label: "China (SSE)", value: 5, color: "#EC4899" },
+      { label: "Ações BR", value: 75, color: "#16A34A" },
+      { label: "Renda Fixa (CDI)", value: 10, color: "#3B82F6" },
+      { label: "Ouro (XAU)", value: 5, color: "#F59E0B" },
+      { label: "Dólar (USD)", value: 5, color: "#10B981" },
+      { label: "Cripto (BTC)", value: 5, color: "#8B5CF6" },
     ],
   },
   {
@@ -79,14 +79,9 @@ const allocationModels = [
     bgColor: "bg-red-50",
     borderColor: "border-red-200",
     description:
-      "Máxima exposição a risco e mercados internacionais. Potencial de alto retorno com alta volatilidade.",
+      "100% em ações brasileiras. Máximo risco e máximo potencial — sua seleção é tudo.",
     composition: [
-      { label: "Renda Fixa (CDI)", value: 10, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 20, color: "#F59E0B" },
-      { label: "Dólar (USD)", value: 20, color: "#10B981" },
-      { label: "Cripto (BTC)", value: 20, color: "#8B5CF6" },
-      { label: "EUA (S&P)", value: 15, color: "#EF4444" },
-      { label: "China (SSE)", value: 15, color: "#EC4899" },
+      { label: "Ações BR", value: 100, color: "#16A34A" },
     ],
   },
 ];
@@ -493,14 +488,7 @@ export default function MinhaCarteiraPage() {
                     key={ticker}
                     className="group inline-flex items-center gap-1.5 rounded-lg bg-[#1A1A1A] pl-1.5 pr-2 py-1 text-xs font-mono font-medium text-white"
                   >
-                    {stock?.logo && (
-                      <img
-                        src={stock.logo}
-                        alt=""
-                        className="h-5 w-5 rounded-md bg-white p-0.5"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                    )}
+                    <StockLogo ticker={ticker} size="sm" className="bg-white" />
                     {ticker}
                     <button
                       onClick={() => removeStock(ticker)}
@@ -593,14 +581,7 @@ export default function MinhaCarteiraPage() {
                       onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-70 transition-opacity"
                     >
-                      <img
-                        src={stock.logo}
-                        alt={stock.ticker}
-                        className="h-8 w-8 rounded-lg object-contain bg-white border border-[#E8E6E1] p-0.5 shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
+                      <StockLogo ticker={stock.ticker} className="!h-8 !w-8 !text-[9px] rounded-lg" />
                       <div className="min-w-0">
                         <p
                           className={cn(

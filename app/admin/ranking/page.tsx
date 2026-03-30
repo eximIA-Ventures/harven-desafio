@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { RankingView } from "@/components/desafio/ranking-view";
 import { DownloadRankingButton } from "./download-button";
+import { CsvRankingButton } from "./csv-button";
 
 export default async function AdminRankingPage() {
   const session = await getSession();
@@ -18,7 +19,10 @@ export default async function AdminRankingPage() {
             Visualização completa com carteiras de todos os participantes
           </p>
         </div>
-        <DownloadRankingButton />
+        <div className="flex items-center gap-2">
+          <CsvRankingButton />
+          <DownloadRankingButton />
+        </div>
       </div>
 
       <RankingView isAdmin showChampionPopup />

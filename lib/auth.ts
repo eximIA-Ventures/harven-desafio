@@ -126,7 +126,7 @@ export function isValidCpf(cpf: string): boolean {
   return true;
 }
 
-// --- Participant login (CPF) ---
+// --- Participant login (CPF or Phone) ---
 
 export async function loginByCpf(
   cpf: string
@@ -149,10 +149,41 @@ export async function loginByCpf(
   return { isNew: true };
 }
 
+export function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+export function isValidPhone(phone: string): boolean {
+  const digits = normalizePhone(phone);
+  return digits.length === 10 || digits.length === 11;
+}
+
+export async function loginByPhone(
+  phone: string
+): Promise<{ user: SessionUser; isNew: false } | { isNew: true } | null> {
+  const normalized = normalizePhone(phone);
+
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.phone, normalized),
+  });
+
+  if (user) {
+    if (!user.active) return null;
+    await setSession(user.id);
+    return {
+      user: { id: user.id, name: user.name, type: user.type as "participant" | "admin" },
+      isNew: false,
+    };
+  }
+
+  return { isNew: true };
+}
+
 // --- Participant registration ---
 
 export async function registerParticipant(data: {
-  cpf: string;
+  cpf?: string;
+  phone?: string;
   name: string;
   email?: string;
   curso?: string;
@@ -163,7 +194,8 @@ export async function registerParticipant(data: {
   const [newUser] = await db
     .insert(schema.users)
     .values({
-      cpf: normalizeCpf(data.cpf),
+      cpf: data.cpf ? normalizeCpf(data.cpf) : null,
+      phone: data.phone ? normalizePhone(data.phone) : null,
       name: data.name.trim(),
       email: data.email?.toLowerCase().trim() || null,
       curso: data.curso?.trim() || null,

@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { X, TrendingUp, TrendingDown, Minus, ExternalLink } from "lucide-react";
+import { StockLogo } from "./stock-logo";
 import { useEffect } from "react";
 
 type PortfolioData = {
@@ -10,6 +11,7 @@ type PortfolioData = {
   curso: string | null;
   sala: string | null;
   returnMonth: number | null;
+  allocationModel: number;
   allocationLabel: string;
   stocks: string[];
 };
@@ -226,14 +228,7 @@ export function PortfolioModal({
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 hover:opacity-70 transition-opacity"
                           >
-                            <img
-                              src={`https://icons.brapi.dev/icons/${item.ticker}.svg`}
-                              alt={item.ticker}
-                              className="h-6 w-6 rounded-md object-contain bg-white border border-[#E8E6E1] p-0.5"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = "none";
-                              }}
-                            />
+                            <StockLogo ticker={item.ticker} />
                             <span className="text-sm font-mono font-semibold text-[#1A1A1A] tracking-wide inline-flex items-center gap-1">
                               {item.ticker}
                               <ExternalLink className="h-2.5 w-2.5 text-[#D9D7D2]" />
@@ -283,7 +278,10 @@ export function PortfolioModal({
         {/* Footer */}
         <div className="border-t border-[#E8E6E1] px-6 py-3 bg-[#FAFAF8] flex items-center justify-between">
           <p className="text-[10px] text-[#D9D7D2]">
-            Peso igual (10% cada) · IBOV: {fmt(ibovReturn)}
+            {data.allocationModel === 4
+              ? "100% Ações BR (10% cada)"
+              : `${[25, 50, 75][data.allocationModel - 1]}% Ações BR (10% cada) · ${[75, 50, 25][data.allocationModel - 1]}% Alocação ${data.allocationLabel}`}
+            {" · "}IBOV: {fmt(ibovReturn)}
           </p>
           <p className="text-[10px] text-[#D9D7D2]">Harven Finance</p>
         </div>

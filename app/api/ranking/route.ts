@@ -58,6 +58,18 @@ export async function GET(request: NextRequest) {
         .map((s) => s.ticker),
     }));
 
+    // Include benchmark returns for display
+    const benchmarkPrices = await db.query.monthlyPrices.findMany({
+      where: eq(schema.monthlyPrices.cycleId, targetCycle.id),
+    });
+    const benchmarkReturns: Record<string, number> = {};
+    for (const bp of benchmarkPrices) {
+      if (bp.ticker.startsWith("__") && bp.ticker.endsWith("__")) {
+        const key = bp.ticker.slice(2, -2).toLowerCase();
+        benchmarkReturns[key] = bp.variation;
+      }
+    }
+
     return NextResponse.json({
       cycles: cycles.map((c) => ({ id: c.id, label: c.label })),
       currentCycleId: targetCycle.id,
@@ -65,6 +77,7 @@ export async function GET(request: NextRequest) {
       ibovReturn: targetCycle.ibovReturn ?? 0,
       ranking,
       stockPrices,
+      benchmarkReturns,
     });
   } catch (error) {
     console.error("Ranking API error:", error);

@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   Lock,
   Users,
+  Eye,
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { LiquidateButton } from "./liquidate-button";
 import { CreateCycleButton } from "./create-cycle-button";
@@ -162,6 +164,15 @@ export default async function CiclosPage() {
                     >
                       {st.label}
                     </span>
+                    {cnt > 0 && (
+                      <Link
+                        href={`/admin/ciclos/${cycle.id}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-[#E8E6E1] bg-white px-3 py-1.5 text-xs font-medium text-[#5C5C5C] hover:bg-[#F5F4F0] transition-colors"
+                      >
+                        <Eye className="h-3 w-3" />
+                        Ver
+                      </Link>
+                    )}
                     {canLiquidate && (
                       <LiquidateButton cycleId={cycle.id} cycleLabel={cycle.label} />
                     )}

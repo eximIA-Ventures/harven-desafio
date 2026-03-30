@@ -36,7 +36,7 @@ export default async function AdminPage() {
   });
 
   // Top 10 ranking
-  let top10: { rank: number; name: string; curso: string | null; sala: string | null; returnMonth: number | null; allocationLabel: string; stocks: string[] }[] = [];
+  let top10: { rank: number; name: string; curso: string | null; sala: string | null; returnMonth: number | null; allocationModel: number; allocationLabel: string; stocks: string[] }[] = [];
   let ibovReturn = 0;
   let stockPrices: Record<string, { open: number; close: number; variation: number }> = {};
   const modelLabels: Record<number, string> = { 1: "Conservador", 2: "Moderado", 3: "Arrojado", 4: "Agressivo" };
@@ -55,6 +55,7 @@ export default async function AdminPage() {
       curso: p.user.curso,
       sala: p.user.sala,
       returnMonth: p.returnMonth,
+      allocationModel: p.allocationModel,
       allocationLabel: modelLabels[p.allocationModel] ?? "—",
       stocks: p.stocks.sort((a, b) => a.position - b.position).map((s) => s.ticker),
     }));

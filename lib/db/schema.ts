@@ -25,6 +25,7 @@ export const users = pgTable("dc_users", {
   anoIngresso: integer("ano_ingresso"), // ex: 2024
   semestre: integer("semestre"), // 1-10
   sala: text("sala"), // ex: "A1", "B2"
+  phone: text("phone").unique(), // ex: "11999998888" (digits only)
   passwordHash: text("password_hash"),
   type: text("type", { enum: ["participant", "admin"] })
     .notNull()

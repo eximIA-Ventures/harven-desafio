@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db";
 import { eq, asc, desc } from "drizzle-orm";
 import { Users } from "lucide-react";
 import { ParticipantsTable } from "./participants-table";
+import { CsvExportButton } from "./csv-button";
 
 export default async function ParticipantesPage() {
   const session = await getSession();
@@ -72,6 +73,12 @@ export default async function ParticipantesPage() {
             {participants.length} cadastrados
           </p>
         </div>
+        {participants.length > 0 && (
+          <CsvExportButton
+            participants={participantData}
+            cycleLabel={latestCycle?.label ?? null}
+          />
+        )}
       </div>
 
       {participants.length === 0 ? (

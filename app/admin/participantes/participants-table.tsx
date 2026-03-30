@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StockLogo } from "@/components/desafio/stock-logo";
 
 const modelLabels: Record<
   number,
@@ -167,15 +168,7 @@ export function ParticipantsTable({
                             <span className="text-[9px] text-[#D9D7D2] tabular-nums">
                               {i + 1}
                             </span>
-                            <img
-                              src={`https://icons.brapi.dev/icons/${ticker}.svg`}
-                              alt={ticker}
-                              className="h-4 w-4 rounded object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
-                              }}
-                            />
+                            <StockLogo ticker={ticker} size="sm" />
                             <span className="text-xs font-mono font-semibold text-[#1A1A1A]">
                               {ticker}
                             </span>

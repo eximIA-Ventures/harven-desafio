@@ -2,25 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, desc, and, asc } from "drizzle-orm";
-
-// Allocation model returns (simplified monthly estimates based on benchmarks)
-const ALLOCATION_RETURNS: Record<number, Record<string, number>> = {
-  // Model 1: Conservador (70% RF, 10% Ouro, 10% Dolar, 5% Cripto, 5% EUA)
-  1: { rf: 0.70, ouro: 0.10, dolar: 0.10, cripto: 0.05, eua: 0.05, china: 0 },
-  // Model 2: Moderado (50% RF, 15% Ouro, 15% Dolar, 10% Cripto, 5% EUA, 5% China)
-  2: { rf: 0.50, ouro: 0.15, dolar: 0.15, cripto: 0.10, eua: 0.05, china: 0.05 },
-  // Model 3: Arrojado (30% RF, 20% Ouro, 20% Dolar, 15% Cripto, 10% EUA, 5% China)
-  3: { rf: 0.30, ouro: 0.20, dolar: 0.20, cripto: 0.15, eua: 0.10, china: 0.05 },
-  // Model 4: Agressivo (10% RF, 20% Ouro, 20% Dolar, 20% Cripto, 15% EUA, 15% China)
-  4: { rf: 0.10, ouro: 0.20, dolar: 0.20, cripto: 0.20, eua: 0.15, china: 0.15 },
-};
+import {
+  ALLOCATION_WEIGHTS,
+  BENCHMARK_TICKERS,
+  CDI_MONTHLY_RATE,
+} from "@/lib/allocation-weights";
 
 async function fetchMonthlyPrices(
   tickers: string[]
 ): Promise<Record<string, { open: number; close: number; variation: number }>> {
   const results: Record<string, { open: number; close: number; variation: number }> = {};
 
-  // Fetch from brapi in batches of 20 (free endpoint quote/list has all)
   try {
     const res = await fetch(
       "https://brapi.dev/api/quote/list?limit=120&sortBy=market_cap_basic&sortOrder=desc"
@@ -32,7 +24,6 @@ async function fetchMonthlyPrices(
 
     for (const s of data.stocks || []) {
       if (tickerSet.has(s.stock) && s.close) {
-        // Use close as current, and calculate open from change%
         const close = s.close;
         const changePercent = s.change ?? 0;
         const open = close / (1 + changePercent / 100);
@@ -46,6 +37,58 @@ async function fetchMonthlyPrices(
   }
 
   return results;
+}
+
+async function fetchBenchmarkReturns(): Promise<Record<string, number>> {
+  const returns: Record<string, number> = {};
+
+  // CDI (computed from Selic)
+  returns.rf = CDI_MONTHLY_RATE;
+
+  // Fetch ETF benchmarks from brapi
+  const etfTickers = Object.values(BENCHMARK_TICKERS);
+  try {
+    const res = await fetch(
+      `https://brapi.dev/api/quote/${etfTickers.join(",")}?range=1mo&interval=1mo`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      for (const result of data.results ?? []) {
+        const ticker = result.symbol;
+        const key = Object.entries(BENCHMARK_TICKERS).find(([, v]) => v === ticker)?.[0];
+        if (!key) continue;
+
+        if (result.regularMarketChangePercent != null) {
+          returns[key] = result.regularMarketChangePercent / 100;
+        } else {
+          const hist = result.historicalDataPrice;
+          if (hist && hist.length >= 2) {
+            const open = hist[0].open;
+            const close = hist[hist.length - 1].close;
+            if (open && close) returns[key] = (close - open) / open;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch ETF benchmarks:", error);
+  }
+
+  // Fetch USD/BRL
+  try {
+    const res = await fetch("https://brapi.dev/api/v2/currency?currency=USD-BRL");
+    if (res.ok) {
+      const data = await res.json();
+      const usd = data.currency?.[0];
+      if (usd?.bidVariation) {
+        returns.dolar = parseFloat(usd.bidVariation) / 100;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch USD/BRL:", error);
+  }
+
+  return returns;
 }
 
 async function fetchIbovReturn(): Promise<number> {
@@ -90,7 +133,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "cycleId obrigatório" }, { status: 400 });
     }
 
-    // Get cycle
     const cycle = await db.query.cycles.findFirst({
       where: eq(schema.cycles.id, cycleId),
     });
@@ -103,7 +145,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ciclo já liquidado" }, { status: 400 });
     }
 
-    // Get all portfolios for this cycle
     const portfolios = await db.query.portfolios.findMany({
       where: eq(schema.portfolios.cycleId, cycleId),
       with: { stocks: true },
@@ -121,10 +162,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fetch prices
-    const prices = await fetchMonthlyPrices([...allTickers]);
+    // Fetch stock prices + benchmark returns in parallel
+    const [prices, benchmarks] = await Promise.all([
+      fetchMonthlyPrices([...allTickers]),
+      fetchBenchmarkReturns(),
+    ]);
 
-    // Save prices to DB
+    // Save stock prices to DB
     for (const [ticker, priceData] of Object.entries(prices)) {
       await db
         .insert(schema.monthlyPrices)
@@ -146,11 +190,33 @@ export async function POST(request: NextRequest) {
         });
     }
 
-    // Calculate return for each portfolio
+    // Save benchmark returns as special tickers (__CDI__, __GOLD11__, etc.)
+    for (const [key, ret] of Object.entries(benchmarks)) {
+      const benchmarkTicker = `__${key.toUpperCase()}__`;
+      await db
+        .insert(schema.monthlyPrices)
+        .values({
+          ticker: benchmarkTicker,
+          cycleId,
+          openPrice: 100,
+          closePrice: parseFloat((100 * (1 + ret)).toFixed(4)),
+          variation: parseFloat(ret.toFixed(6)),
+        })
+        .onConflictDoUpdate({
+          target: [schema.monthlyPrices.ticker, schema.monthlyPrices.cycleId],
+          set: {
+            closePrice: parseFloat((100 * (1 + ret)).toFixed(4)),
+            variation: parseFloat(ret.toFixed(6)),
+            fetchedAt: new Date(),
+          },
+        });
+    }
+
+    // Calculate weighted return for each portfolio
     const returns: { portfolioId: string; returnMonth: number }[] = [];
 
     for (const portfolio of portfolios) {
-      // Stock return: average of all 10 stocks' variations
+      // Stock return: average of all 10 stocks
       let stockReturn = 0;
       let stockCount = 0;
 
@@ -164,10 +230,14 @@ export async function POST(request: NextRequest) {
 
       const avgStockReturn = stockCount > 0 ? stockReturn / stockCount : 0;
 
-      // For simplicity in this version, the total return IS the stock return
-      // The allocation model affects how much weight goes to stocks vs other assets
-      // In a full implementation, we'd also fetch gold, USD, BTC, S&P, SSE returns
-      const totalReturn = avgStockReturn;
+      // Apply allocation model weights
+      const weights = ALLOCATION_WEIGHTS[portfolio.allocationModel] ?? ALLOCATION_WEIGHTS[4];
+      let totalReturn = (weights.acoes ?? 1) * avgStockReturn;
+
+      for (const [key, weight] of Object.entries(weights)) {
+        if (key === "acoes" || weight === 0) continue;
+        totalReturn += weight * (benchmarks[key] ?? 0);
+      }
 
       returns.push({ portfolioId: portfolio.id, returnMonth: totalReturn });
     }
@@ -177,9 +247,7 @@ export async function POST(request: NextRequest) {
 
     // Get previous cycle for accumulation
     const prevCycle = await db.query.cycles.findFirst({
-      where: and(
-        eq(schema.cycles.status, "liquidated"),
-      ),
+      where: eq(schema.cycles.status, "liquidated"),
       orderBy: [desc(schema.cycles.year), desc(schema.cycles.month)],
     });
 
@@ -187,7 +255,6 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < returns.length; i++) {
       const r = returns[i];
 
-      // Get previous accumulated return
       let prevAccum = 0;
       if (prevCycle) {
         const prevPortfolio = await db.query.portfolios.findFirst({
@@ -214,7 +281,7 @@ export async function POST(request: NextRequest) {
         .where(eq(schema.portfolios.id, r.portfolioId));
     }
 
-    // Fetch IBOV return automatically
+    // Fetch IBOV return
     const ibovReturn = await fetchIbovReturn();
 
     // Update cycle status
@@ -232,6 +299,7 @@ export async function POST(request: NextRequest) {
       message: `Ciclo ${cycle.label} liquidado com sucesso`,
       portfoliosProcessed: returns.length,
       stocksPriced: Object.keys(prices).length,
+      benchmarks,
       ibovReturn,
     });
   } catch (error) {
