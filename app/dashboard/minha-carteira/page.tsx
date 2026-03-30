@@ -79,9 +79,14 @@ const allocationModels = [
     bgColor: "bg-red-50",
     borderColor: "border-red-200",
     description:
-      "100% em ações brasileiras. Máximo risco e máximo potencial — sua seleção é tudo.",
+      "Zero renda fixa. Máxima exposição a ativos voláteis — ações, cripto, ouro, dólar e mercados internacionais.",
     composition: [
-      { label: "Ações BR", value: 100, color: "#16A34A" },
+      { label: "Ações BR", value: 40, color: "#16A34A" },
+      { label: "Cripto (BTC)", value: 20, color: "#8B5CF6" },
+      { label: "Ouro (XAU)", value: 15, color: "#F59E0B" },
+      { label: "Dólar (USD)", value: 10, color: "#10B981" },
+      { label: "EUA (S&P)", value: 10, color: "#EF4444" },
+      { label: "China (SSE)", value: 5, color: "#EC4899" },
     ],
   },
 ];
@@ -409,12 +414,17 @@ export default function MinhaCarteiraPage() {
                 </div>
 
                 {/* Donut */}
-                <div className="flex justify-center mb-4">
-                  <DonutChart composition={model.composition} size={110} />
+                <div className="flex justify-center mb-3">
+                  <DonutChart composition={model.composition} size={100} />
                 </div>
 
+                {/* Description */}
+                <p className="text-[10px] text-[#9CA3AF] leading-relaxed mb-3">
+                  {model.description}
+                </p>
+
                 {/* Legend */}
-                <div className="space-y-1.5 mt-auto">
+                <div className="space-y-1.5 mt-auto pt-3 border-t border-[#E8E6E1]/50">
                   {model.composition.map((c) => (
                     <div
                       key={c.label}
