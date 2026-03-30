@@ -179,7 +179,7 @@ export async function loginByPhone(
   return { isNew: true };
 }
 
-// --- Participant registration ---
+// --- Participant registration (with account linking) ---
 
 export async function registerParticipant(data: {
   cpf?: string;
@@ -191,11 +191,42 @@ export async function registerParticipant(data: {
   semestre?: number;
   sala?: string;
 }): Promise<SessionUser> {
+  const normalizedCpf = data.cpf ? normalizeCpf(data.cpf) : null;
+  const normalizedPhone = data.phone ? normalizePhone(data.phone) : null;
+
+  // Check if either identifier matches an existing user (account linking)
+  let existingUser = null;
+  if (normalizedCpf) {
+    existingUser = await db.query.users.findFirst({
+      where: eq(schema.users.cpf, normalizedCpf),
+    });
+  }
+  if (!existingUser && normalizedPhone) {
+    existingUser = await db.query.users.findFirst({
+      where: eq(schema.users.phone, normalizedPhone),
+    });
+  }
+
+  if (existingUser) {
+    // Link: update existing user with the missing identifier
+    const updates: Record<string, string | null> = {};
+    if (normalizedCpf && !existingUser.cpf) updates.cpf = normalizedCpf;
+    if (normalizedPhone && !existingUser.phone) updates.phone = normalizedPhone;
+
+    if (Object.keys(updates).length > 0) {
+      await db.update(schema.users).set(updates).where(eq(schema.users.id, existingUser.id));
+    }
+
+    await setSession(existingUser.id);
+    return { id: existingUser.id, name: existingUser.name, type: existingUser.type as "participant" | "admin" };
+  }
+
+  // Create new user with both identifiers
   const [newUser] = await db
     .insert(schema.users)
     .values({
-      cpf: data.cpf ? normalizeCpf(data.cpf) : null,
-      phone: data.phone ? normalizePhone(data.phone) : null,
+      cpf: normalizedCpf,
+      phone: normalizedPhone,
       name: data.name.trim(),
       email: data.email?.toLowerCase().trim() || null,
       curso: data.curso?.trim() || null,

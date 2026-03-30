@@ -133,13 +133,9 @@ export default function LoginPage() {
         sala: sala || undefined,
       };
 
-      if (loginMode === "cpf") {
-        payload.cpf = rawDigits(cpf);
-        if (rawDigits(phone)) payload.phone = rawDigits(phone);
-      } else {
-        payload.phone = rawDigits(phone);
-        if (rawDigits(cpf)) payload.cpf = rawDigits(cpf);
-      }
+      // Always send both identifiers
+      payload.cpf = rawDigits(cpf);
+      payload.phone = rawDigits(phone);
 
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -397,14 +393,11 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Secondary identifier (optional) */}
+                {/* Secondary identifier (required — enables login with both) */}
                 {loginMode === "phone" ? (
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
-                      CPF
-                      <span className="ml-1 normal-case tracking-normal text-[#D9D7D2]">
-                        (opcional)
-                      </span>
+                      CPF *
                     </label>
                     <div className="relative mt-1.5">
                       <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
@@ -413,6 +406,7 @@ export default function LoginPage() {
                         inputMode="numeric"
                         value={cpf}
                         onChange={handleCpfChange}
+                        required
                         maxLength={14}
                         className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
                         placeholder="000.000.000-00"
@@ -422,10 +416,7 @@ export default function LoginPage() {
                 ) : (
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
-                      Celular
-                      <span className="ml-1 normal-case tracking-normal text-[#D9D7D2]">
-                        (opcional)
-                      </span>
+                      Celular *
                     </label>
                     <div className="relative mt-1.5">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#D9D7D2]" />
@@ -434,6 +425,7 @@ export default function LoginPage() {
                         inputMode="tel"
                         value={phone}
                         onChange={handlePhoneChange}
+                        required
                         maxLength={15}
                         className="w-full rounded-xl border border-[#E8E6E1] bg-[#FAFAF8] pl-11 pr-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] focus:bg-white placeholder:text-[#D9D7D2] font-mono tracking-wide"
                         placeholder="(00) 00000-0000"
@@ -557,7 +549,7 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  disabled={loading || !name.trim() || !curso || !anoIngresso || !semestre || !sala.trim() || !acceptedTerms}
+                  disabled={loading || !name.trim() || !curso || !anoIngresso || !semestre || !sala.trim() || !acceptedTerms || rawDigits(cpf).length !== 11 || rawDigits(phone).length < 10}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A1A1A] px-6 py-3 text-sm font-medium text-white transition-all hover:bg-[#333] hover:shadow-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {loading ? <Spinner /> : (
