@@ -18,6 +18,25 @@ import { StockLogo } from "@/components/desafio/stock-logo";
 
 // --- Allocation Models ---
 
+// All models share the same 7 asset classes for consistent card layout
+// Classes with 0% are hidden from the donut but shown in the legend as "—"
+const allAssetClasses = [
+  { key: "acoes", label: "Ações BR", color: "#16A34A" },
+  { key: "rf", label: "Renda Fixa (CDI)", color: "#3B82F6" },
+  { key: "ouro", label: "Ouro (XAU)", color: "#F59E0B" },
+  { key: "dolar", label: "Dólar (USD)", color: "#10B981" },
+  { key: "cripto", label: "Cripto (BTC)", color: "#8B5CF6" },
+  { key: "eua", label: "EUA (S&P)", color: "#EF4444" },
+  { key: "china", label: "China (SSE)", color: "#EC4899" },
+];
+
+const modelWeights: Record<number, Record<string, number>> = {
+  1: { acoes: 25, rf: 50, ouro: 10, dolar: 10, cripto: 5, eua: 0, china: 0 },
+  2: { acoes: 50, rf: 25, ouro: 10, dolar: 5, cripto: 5, eua: 5, china: 0 },
+  3: { acoes: 75, rf: 10, ouro: 5, dolar: 5, cripto: 5, eua: 0, china: 0 },
+  4: { acoes: 30, rf: 15, ouro: 15, dolar: 10, cripto: 15, eua: 10, china: 5 },
+};
+
 const allocationModels = [
   {
     id: 1,
@@ -28,13 +47,6 @@ const allocationModels = [
     borderColor: "border-blue-200",
     description:
       "Foco em preservação de capital. Apenas 25% em ações — o restante protegido em renda fixa e ativos reais.",
-    composition: [
-      { label: "Ações BR", value: 25, color: "#16A34A" },
-      { label: "Renda Fixa (CDI)", value: 50, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 10, color: "#F59E0B" },
-      { label: "Dólar (USD)", value: 10, color: "#10B981" },
-      { label: "Cripto (BTC)", value: 5, color: "#8B5CF6" },
-    ],
   },
   {
     id: 2,
@@ -45,14 +57,6 @@ const allocationModels = [
     borderColor: "border-emerald-200",
     description:
       "Equilíbrio entre ações e diversificação. 50% em ações com base sólida em renda fixa e mercado internacional.",
-    composition: [
-      { label: "Ações BR", value: 50, color: "#16A34A" },
-      { label: "Renda Fixa (CDI)", value: 25, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 10, color: "#F59E0B" },
-      { label: "Dólar (USD)", value: 5, color: "#10B981" },
-      { label: "Cripto (BTC)", value: 5, color: "#8B5CF6" },
-      { label: "EUA (S&P)", value: 5, color: "#EF4444" },
-    ],
   },
   {
     id: 3,
@@ -63,13 +67,6 @@ const allocationModels = [
     borderColor: "border-orange-200",
     description:
       "Alta exposição a ações (75%). Para quem aceita volatilidade em busca de retornos superiores.",
-    composition: [
-      { label: "Ações BR", value: 75, color: "#16A34A" },
-      { label: "Renda Fixa (CDI)", value: 10, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 5, color: "#F59E0B" },
-      { label: "Dólar (USD)", value: 5, color: "#10B981" },
-      { label: "Cripto (BTC)", value: 5, color: "#8B5CF6" },
-    ],
   },
   {
     id: 4,
@@ -80,15 +77,6 @@ const allocationModels = [
     borderColor: "border-red-200",
     description:
       "Alta exposição a ativos voláteis — cripto, ouro, dólar e mercados internacionais com base mínima em renda fixa.",
-    composition: [
-      { label: "Ações BR", value: 30, color: "#16A34A" },
-      { label: "Renda Fixa (CDI)", value: 15, color: "#3B82F6" },
-      { label: "Ouro (XAU)", value: 15, color: "#F59E0B" },
-      { label: "Cripto (BTC)", value: 15, color: "#8B5CF6" },
-      { label: "Dólar (USD)", value: 10, color: "#10B981" },
-      { label: "EUA (S&P)", value: 10, color: "#EF4444" },
-      { label: "China (SSE)", value: 5, color: "#EC4899" },
-    ],
   },
 ];
 
@@ -415,36 +403,47 @@ export default function MinhaCarteiraPage() {
                 </div>
 
                 {/* Donut */}
-                <div className="flex justify-center mb-3">
-                  <DonutChart composition={model.composition} size={100} />
-                </div>
+                {(() => {
+                  const w = modelWeights[model.id];
+                  const donutData = allAssetClasses
+                    .filter((a) => w[a.key] > 0)
+                    .map((a) => ({ label: a.label, value: w[a.key], color: a.color }));
+                  return (
+                    <div className="flex justify-center mb-3">
+                      <DonutChart composition={donutData} size={100} />
+                    </div>
+                  );
+                })()}
 
                 {/* Description */}
                 <p className="text-[10px] text-[#9CA3AF] leading-relaxed mb-3">
                   {model.description}
                 </p>
 
-                {/* Legend */}
+                {/* Legend — all 7 classes, consistent across cards */}
                 <div className="space-y-1.5 mt-auto pt-3 border-t border-[#E8E6E1]/50">
-                  {model.composition.map((c) => (
-                    <div
-                      key={c.label}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: c.color }}
-                        />
-                        <span className="text-[11px] text-[#5C5C5C] truncate">
-                          {c.label}
+                  {allAssetClasses.map((a) => {
+                    const val = modelWeights[model.id][a.key];
+                    return (
+                      <div
+                        key={a.key}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: val > 0 ? a.color : "#E8E6E1" }}
+                          />
+                          <span className={cn("text-[11px] truncate", val > 0 ? "text-[#5C5C5C]" : "text-[#D9D7D2]")}>
+                            {a.label}
+                          </span>
+                        </div>
+                        <span className={cn("text-[11px] font-mono font-semibold tabular-nums ml-2", val > 0 ? "text-[#1A1A1A]" : "text-[#D9D7D2]")}>
+                          {val > 0 ? `${val}%` : "—"}
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono font-semibold text-[#1A1A1A] tabular-nums ml-2">
-                        {c.value}%
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </button>
             );
