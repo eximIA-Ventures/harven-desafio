@@ -20,8 +20,10 @@ export function formatMonth(month: number, year: number): string {
 }
 
 export function getLastDayOfMonth(month: number, year: number): Date {
-  // Deadline: dia 1 do mês seguinte às 00:00 (meia-noite)
-  const date = new Date(year, month, 1); // month is 1-based, Date month is 0-based → next month day 1
-  date.setHours(0, 0, 0, 0);
-  return date;
+  // Deadline: dia 1 do mês seguinte às 00:00 BRT (03:00 UTC)
+  // month is 1-based → Date(year, month, 1) gives next month day 1 (0-based)
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  // Use ISO string with BRT offset (-03:00) to avoid local timezone issues
+  return new Date(`${nextYear}-${String(nextMonth).padStart(2, "0")}-01T00:00:00-03:00`);
 }
