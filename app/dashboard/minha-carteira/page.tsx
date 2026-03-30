@@ -79,11 +79,12 @@ const allocationModels = [
     bgColor: "bg-red-50",
     borderColor: "border-red-200",
     description:
-      "Zero renda fixa. Máxima exposição a ativos voláteis — ações, cripto, ouro, dólar e mercados internacionais.",
+      "Alta exposição a ativos voláteis — cripto, ouro, dólar e mercados internacionais com base mínima em renda fixa.",
     composition: [
-      { label: "Ações BR", value: 40, color: "#16A34A" },
-      { label: "Cripto (BTC)", value: 20, color: "#8B5CF6" },
+      { label: "Ações BR", value: 30, color: "#16A34A" },
+      { label: "Renda Fixa (CDI)", value: 15, color: "#3B82F6" },
       { label: "Ouro (XAU)", value: 15, color: "#F59E0B" },
+      { label: "Cripto (BTC)", value: 15, color: "#8B5CF6" },
       { label: "Dólar (USD)", value: 10, color: "#10B981" },
       { label: "EUA (S&P)", value: 10, color: "#EF4444" },
       { label: "China (SSE)", value: 5, color: "#EC4899" },
