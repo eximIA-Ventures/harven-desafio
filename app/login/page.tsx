@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   X,
 } from "lucide-react";
+import { track } from "@/lib/track";
 
 type Step = "login" | "register" | "welcome" | "admin";
 type LoginMode = "cpf" | "phone";
@@ -105,8 +106,10 @@ export default function LoginPage() {
       }
 
       if (data.step === "register") {
+        track("register_start", { method: loginMode });
         setStep("register");
       } else if (data.step === "done") {
+        track("login", { method: loginMode });
         setWelcomeName(data.userName);
         setStep("welcome");
         setTimeout(() => router.push(data.redirectTo), 1500);
@@ -150,6 +153,7 @@ export default function LoginPage() {
       }
 
       if (data.step === "done") {
+        track("register_complete", { method: loginMode });
         setStep("welcome");
         setTimeout(() => router.push(data.redirectTo), 1500);
       }

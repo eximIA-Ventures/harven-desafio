@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StockLogo } from "@/components/desafio/stock-logo";
+import { track } from "@/lib/track";
 
 // --- Allocation Models ---
 
@@ -230,6 +231,10 @@ export default function MinhaCarteiraPage() {
           ? "Carteira atualizada com sucesso!"
           : "Carteira enviada com sucesso!"
       );
+      track(data.updated ? "portfolio_update" : "portfolio_submit", {
+        model: selectedModel,
+        stocks: selectedStocks,
+      });
     } catch (err) {
       console.error("Submit error:", err);
       setSubmitMessage("Erro de conexão. Tente novamente.");
@@ -379,6 +384,7 @@ export default function MinhaCarteiraPage() {
                   setSelectedModel(model.id);
                   setSubmitted(false);
                   setSubmitMessage("");
+                  track("model_select", { model: model.id, label: model.label });
                 }}
                 className={cn(
                   "rounded-xl border-2 p-5 text-left transition-all cursor-pointer flex flex-col",

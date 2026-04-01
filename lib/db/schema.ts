@@ -115,6 +115,17 @@ export const monthlyPricesRelations = relations(monthlyPrices, ({ one }) => ({
   cycle: one(cycles, { fields: [monthlyPrices.cycleId], references: [cycles.id] }),
 }));
 
+// --- Eventos de analytics ---
+
+export const events = pgTable("dc_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id),
+  event: text("event").notNull(), // page_view, login, portfolio_submit, stock_select, model_select, etc.
+  page: text("page"),
+  metadata: text("metadata"), // JSON string for extra data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // --- Composição do Ibovespa ---
 
 export const ibovComposition = pgTable("dc_ibov_composition", {

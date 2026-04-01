@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   LayoutDashboard,
+  BarChart3,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -35,6 +36,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/ranking", label: "Ranking", icon: Trophy },
   { href: "/admin/participantes", label: "Participantes", icon: Users },
   { href: "/admin/ciclos", label: "Ciclos Mensais", icon: CalendarClock },
+  { href: "/admin/insights", label: "Insights", icon: BarChart3 },
 ];
 
 export function Sidebar({ userType }: { userType: "participant" | "admin" }) {
