@@ -88,6 +88,7 @@ export function PortfolioRing() {
 
   const sharedStocks = allStocks.filter((s) => s.count === selectedPortfolios.length && selectedPortfolios.length > 1);
   const exclusiveStocks = allStocks.filter((s) => s.count === 1);
+  const partialStocks = allStocks.filter((s) => s.count > 1 && s.count < selectedPortfolios.length);
 
   // Map exclusive stock → owner name + color
   const exclusiveMap = useMemo(() => {
@@ -296,7 +297,7 @@ export function PortfolioRing() {
           </div>
 
           {/* Summary */}
-          <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-[#E8E6E1]">
+          <div className={cn("gap-3 mt-4 pt-4 border-t border-[#E8E6E1]", partialStocks.length > 0 ? "grid grid-cols-3" : "grid grid-cols-2")}>
             <div className="text-center">
               <p className="text-xl font-bold text-[#16A34A]">{sharedStocks.length}</p>
               <p className="text-[9px] text-[#9CA3AF] uppercase tracking-wider">Em comum</p>
@@ -306,10 +307,15 @@ export function PortfolioRing() {
                 </p>
               )}
             </div>
-            <div className="text-center">
-              <p className="text-xl font-bold text-[#1A1A1A]">{allStocks.length}</p>
-              <p className="text-[9px] text-[#9CA3AF] uppercase tracking-wider">Papéis únicos</p>
-            </div>
+            {partialStocks.length > 0 && (
+              <div className="text-center">
+                <p className="text-xl font-bold text-[#5C5C5C]">{partialStocks.length}</p>
+                <p className="text-[9px] text-[#9CA3AF] uppercase tracking-wider">Parciais</p>
+                <p className="text-[10px] text-[#9CA3AF] font-mono mt-1">
+                  {partialStocks.map((s) => s.ticker).join(", ")}
+                </p>
+              </div>
+            )}
             <div className="text-center">
               <p className="text-xl font-bold text-[#D97706]">{exclusiveStocks.length}</p>
               <p className="text-[9px] text-[#9CA3AF] uppercase tracking-wider">Exclusivos</p>
