@@ -9,6 +9,7 @@ import {
   TrendingUp,
   BarChart3,
 } from "lucide-react";
+import { PortfolioRing } from "@/components/desafio/portfolio-ring";
 
 const modelLabels: Record<number, { label: string; color: string; bg: string; border: string }> = {
   1: { label: "Conservador", color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
@@ -134,6 +135,11 @@ export default async function CompararPage() {
         <p className="mt-1 text-sm text-[#9CA3AF]">
           {cycle.label} · {portfolios.length} carteiras
         </p>
+      </div>
+
+      {/* Ring — interactive comparison */}
+      <div className="mb-8">
+        <PortfolioRing />
       </div>
 
       {/* Model distribution */}
