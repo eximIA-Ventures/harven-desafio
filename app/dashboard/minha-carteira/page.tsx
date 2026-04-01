@@ -304,6 +304,13 @@ export default function MinhaCarteiraPage() {
                 .map((h, i) => {
                   const modelLabel = ["", "Conservador", "Moderado", "Arrojado", "Agressivo"][h.allocationModel] ?? "";
                   const isEditable = h.cycleStatus !== "liquidated";
+                  const modelColor: Record<number, { bg: string; text: string; border: string }> = {
+                    1: { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-200" },
+                    2: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-200" },
+                    3: { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-200" },
+                    4: { bg: "bg-red-50", text: "text-red-600", border: "border-red-200" },
+                  };
+                  const mc = modelColor[h.allocationModel] ?? modelColor[2];
                   return (
                     <div
                       key={i}
@@ -314,7 +321,7 @@ export default function MinhaCarteiraPage() {
                           <span className="text-sm font-medium text-[#1A1A1A]">
                             {h.cycleLabel}
                           </span>
-                          <span className="text-[10px] text-[#9CA3AF]">
+                          <span className={cn("text-[10px] font-medium rounded-full px-2 py-0.5 border", mc.bg, mc.text, mc.border)}>
                             {modelLabel}
                           </span>
                           {h.cycleStatus === "liquidated" && (

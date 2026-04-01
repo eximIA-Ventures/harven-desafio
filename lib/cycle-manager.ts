@@ -3,16 +3,24 @@ import { eq, and, desc, ne } from "drizzle-orm";
 import { formatMonth, getLastDayOfMonth } from "./utils";
 
 /**
- * Ensures a cycle exists for the current month.
- * If not, creates it and closes any previous open cycle.
- * Called lazily from API routes — no cron needed.
+ * Ensures a cycle exists for submissions.
+ * Only creates a new cycle if ALL previous cycles are liquidated.
+ * This prevents opening April before March is liquidated.
  */
 export async function ensureCurrentCycle() {
+  // If there's any non-liquidated cycle, return it (don't create new)
+  const pending = await db.query.cycles.findFirst({
+    where: ne(schema.cycles.status, "liquidated"),
+    orderBy: [desc(schema.cycles.year), desc(schema.cycles.month)],
+  });
+
+  if (pending) return pending;
+
+  // All cycles are liquidated (or none exist) — create new cycle for current month
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  // Check if cycle already exists
   const existing = await db.query.cycles.findFirst({
     where: and(
       eq(schema.cycles.month, month),
@@ -22,21 +30,6 @@ export async function ensureCurrentCycle() {
 
   if (existing) return existing;
 
-  // Close any previous open cycles
-  const openCycles = await db.query.cycles.findMany({
-    where: eq(schema.cycles.status, "open"),
-  });
-
-  for (const oc of openCycles) {
-    if (oc.month !== month || oc.year !== year) {
-      await db
-        .update(schema.cycles)
-        .set({ status: "closed" })
-        .where(eq(schema.cycles.id, oc.id));
-    }
-  }
-
-  // Create new cycle
   const label = formatMonth(month, year);
   const deadline = getLastDayOfMonth(month, year);
 
