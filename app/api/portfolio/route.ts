@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ne } from "drizzle-orm";
 import { ensureCurrentCycle } from "@/lib/cycle-manager";
 
-// GET — fetch user's portfolio for current open cycle
+// GET — fetch user's portfolio for current non-liquidated cycle
 export async function GET() {
   try {
     const session = await getSession();
@@ -15,9 +15,9 @@ export async function GET() {
     // Ensure current month's cycle exists (auto-creates if needed)
     await ensureCurrentCycle();
 
-    // Find current open cycle
+    // Find most recent non-liquidated cycle (open or closed)
     const openCycle = await db.query.cycles.findFirst({
-      where: eq(schema.cycles.status, "open"),
+      where: ne(schema.cycles.status, "liquidated"),
       orderBy: [desc(schema.cycles.year), desc(schema.cycles.month)],
     });
 
@@ -95,15 +95,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find current open cycle
+    // Find current non-liquidated cycle
     const openCycle = await db.query.cycles.findFirst({
-      where: eq(schema.cycles.status, "open"),
+      where: ne(schema.cycles.status, "liquidated"),
       orderBy: [desc(schema.cycles.year), desc(schema.cycles.month)],
     });
 
     if (!openCycle) {
       return NextResponse.json(
-        { error: "Nenhum ciclo aberto no momento" },
+        { error: "Nenhum ciclo disponível para envio" },
         { status: 400 }
       );
     }
