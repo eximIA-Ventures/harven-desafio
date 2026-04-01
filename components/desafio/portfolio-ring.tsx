@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { Search, X, Swords, Check } from "lucide-react";
+import { Search, X, Swords, Check, ChevronDown } from "lucide-react";
 
 type Portfolio = {
   userId: string;
@@ -13,33 +13,46 @@ type Portfolio = {
   stocks: string[];
 };
 
-const modelConfig: Record<number, { label: string; color: string; bg: string; border: string }> = {
-  1: { label: "Conservador", color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
-  2: { label: "Moderado", color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
-  3: { label: "Arrojado", color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200" },
-  4: { label: "Agressivo", color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
+type Cycle = { id: string; label: string; status: string };
+
+const modelConfig: Record<number, { label: string; color: string; bg: string }> = {
+  1: { label: "Conservador", color: "text-blue-600", bg: "bg-blue-50" },
+  2: { label: "Moderado", color: "text-emerald-600", bg: "bg-emerald-50" },
+  3: { label: "Arrojado", color: "text-orange-600", bg: "bg-orange-50" },
+  4: { label: "Agressivo", color: "text-red-600", bg: "bg-red-50" },
 };
 
-// Distinct colors for each participant in the ring
 const ringColors = [
-  { bg: "bg-[#1A1A1A]", text: "text-white", dot: "bg-[#1A1A1A]" },
-  { bg: "bg-[#C6AD7C]", text: "text-white", dot: "bg-[#C6AD7C]" },
-  { bg: "bg-[#3B82F6]", text: "text-white", dot: "bg-[#3B82F6]" },
-  { bg: "bg-[#16A34A]", text: "text-white", dot: "bg-[#16A34A]" },
-  { bg: "bg-[#DC2626]", text: "text-white", dot: "bg-[#DC2626]" },
+  { bg: "bg-[#1A1A1A]", text: "text-white", dot: "bg-[#1A1A1A]", label: "text-[#1A1A1A]" },
+  { bg: "bg-[#C6AD7C]", text: "text-white", dot: "bg-[#C6AD7C]", label: "text-[#C6AD7C]" },
+  { bg: "bg-[#3B82F6]", text: "text-white", dot: "bg-[#3B82F6]", label: "text-[#3B82F6]" },
+  { bg: "bg-[#16A34A]", text: "text-white", dot: "bg-[#16A34A]", label: "text-[#16A34A]" },
+  { bg: "bg-[#DC2626]", text: "text-white", dot: "bg-[#DC2626]", label: "text-[#DC2626]" },
 ];
 
 export function PortfolioRing() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [cycles, setCycles] = useState<Cycle[]>([]);
+  const [currentCycleId, setCurrentCycleId] = useState<string | null>(null);
+  const [currentCycleLabel, setCurrentCycleLabel] = useState<string>("");
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    fetch("/api/admin/portfolios")
+  function fetchCycle(cycleId?: string) {
+    const url = cycleId ? `/api/admin/portfolios?cycleId=${cycleId}` : "/api/admin/portfolios";
+    fetch(url)
       .then((r) => r.json())
-      .then((d) => setPortfolios(d.portfolios ?? []))
+      .then((d) => {
+        setPortfolios(d.portfolios ?? []);
+        setCycles(d.cycles ?? []);
+        setCurrentCycleId(d.currentCycleId ?? null);
+        setCurrentCycleLabel(d.currentCycleLabel ?? "");
+        setSelected([]);
+      })
       .catch(() => {});
-  }, []);
+  }
+
+  useEffect(() => { fetchCycle(); }, []);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return portfolios;
@@ -55,9 +68,7 @@ export function PortfolioRing() {
     setSelected((prev) =>
       prev.includes(userId)
         ? prev.filter((id) => id !== userId)
-        : prev.length < 5
-          ? [...prev, userId]
-          : prev
+        : prev.length < 5 ? [...prev, userId] : prev
     );
   }
 
@@ -78,7 +89,22 @@ export function PortfolioRing() {
   const sharedStocks = allStocks.filter((s) => s.count === selectedPortfolios.length && selectedPortfolios.length > 1);
   const exclusiveStocks = allStocks.filter((s) => s.count === 1);
 
-  if (portfolios.length === 0) return null;
+  // Map exclusive stock → owner name + color
+  const exclusiveMap = useMemo(() => {
+    const map = new Map<string, { name: string; colorIdx: number }>();
+    for (const s of exclusiveStocks) {
+      const ownerIdx = selectedPortfolios.findIndex((p) => s.owners.includes(p.userId));
+      if (ownerIdx >= 0) {
+        map.set(s.ticker, {
+          name: selectedPortfolios[ownerIdx].name.split(" ")[0],
+          colorIdx: ownerIdx,
+        });
+      }
+    }
+    return map;
+  }, [exclusiveStocks, selectedPortfolios]);
+
+  if (portfolios.length === 0 && cycles.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-[#E8E6E1] bg-white overflow-hidden">
@@ -88,9 +114,28 @@ export function PortfolioRing() {
           <Swords className="h-4 w-4 text-[#C6AD7C]" />
           <p className="text-sm font-semibold text-white">Ring de Comparação</p>
         </div>
-        <p className="text-[10px] text-white/50">
-          {selected.length}/5 selecionados
-        </p>
+        <div className="flex items-center gap-3">
+          {/* Cycle selector */}
+          {cycles.length > 1 && (
+            <div className="relative">
+              <select
+                value={currentCycleId ?? ""}
+                onChange={(e) => fetchCycle(e.target.value)}
+                className="appearance-none bg-white/10 text-white text-[10px] font-medium rounded-lg pl-2 pr-6 py-1 outline-none cursor-pointer border border-white/20 hover:bg-white/20 transition-colors"
+              >
+                {cycles.map((c) => (
+                  <option key={c.id} value={c.id} className="text-[#1A1A1A]">
+                    {c.label} {c.status === "liquidated" ? "✓" : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-white/50 pointer-events-none" />
+            </div>
+          )}
+          <p className="text-[10px] text-white/50">
+            {selected.length}/5 selecionados
+          </p>
+        </div>
       </div>
 
       {/* Participant selector */}
@@ -106,7 +151,6 @@ export function PortfolioRing() {
           />
         </div>
 
-        {/* Selected chips */}
         {selected.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {selectedPortfolios.map((p, idx) => {
@@ -115,10 +159,7 @@ export function PortfolioRing() {
                 <button
                   key={p.userId}
                   onClick={() => toggle(p.userId)}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium cursor-pointer",
-                    rc.bg, rc.text
-                  )}
+                  className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium cursor-pointer", rc.bg, rc.text)}
                 >
                   {p.name.split(" ")[0]}
                   <X className="h-2.5 w-2.5" />
@@ -128,7 +169,6 @@ export function PortfolioRing() {
           </div>
         )}
 
-        {/* Participant list */}
         <div className="max-h-40 overflow-y-auto space-y-0.5">
           {filtered.map((p) => {
             const isSelected = selected.includes(p.userId);
@@ -159,15 +199,17 @@ export function PortfolioRing() {
               </button>
             );
           })}
+          {portfolios.length === 0 && (
+            <p className="text-xs text-[#9CA3AF] text-center py-4">Nenhuma carteira neste ciclo.</p>
+          )}
         </div>
       </div>
 
       {/* Comparison view */}
       {selectedPortfolios.length >= 2 && (
         <div className="p-5">
-          {/* Stock grid — who has what */}
           <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider font-medium mb-3">
-            Comparação de papéis
+            Comparação de papéis · {currentCycleLabel}
           </p>
 
           <div className="overflow-x-auto">
@@ -191,50 +233,64 @@ export function PortfolioRing() {
                     );
                   })}
                   <th className="px-2 py-2 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
-                    Total
+                    Status
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {allStocks.map(({ ticker, owners, count }) => (
-                  <tr
-                    key={ticker}
-                    className={cn(
-                      "border-b border-[#E8E6E1]/30 last:border-0",
-                      count === selectedPortfolios.length && "bg-[#16A34A]/[0.04]"
-                    )}
-                  >
-                    <td className="px-2 py-1.5">
-                      <span className={cn(
-                        "text-xs font-mono font-semibold",
-                        count === selectedPortfolios.length ? "text-[#16A34A]" : "text-[#1A1A1A]"
-                      )}>
-                        {ticker}
-                      </span>
-                    </td>
-                    {selectedPortfolios.map((p, idx) => {
-                      const has = owners.includes(p.userId);
-                      const rc = ringColors[idx % ringColors.length];
-                      return (
-                        <td key={p.userId} className="px-2 py-1.5 text-center">
-                          {has ? (
-                            <span className={cn("inline-block h-3 w-3 rounded-full", rc.dot)} />
-                          ) : (
-                            <span className="inline-block h-3 w-3 rounded-full border border-[#E8E6E1]" />
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="px-2 py-1.5 text-center">
-                      <span className={cn(
-                        "text-[10px] font-bold tabular-nums",
-                        count === selectedPortfolios.length ? "text-[#16A34A]" : "text-[#9CA3AF]"
-                      )}>
-                        {count}/{selectedPortfolios.length}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {allStocks.map(({ ticker, owners, count }) => {
+                  const isShared = count === selectedPortfolios.length;
+                  const isExclusive = count === 1;
+                  const exclusiveOwner = isExclusive ? exclusiveMap.get(ticker) : null;
+
+                  return (
+                    <tr
+                      key={ticker}
+                      className={cn(
+                        "border-b border-[#E8E6E1]/30 last:border-0",
+                        isShared && "bg-[#16A34A]/[0.04]",
+                        isExclusive && "bg-[#D97706]/[0.03]"
+                      )}
+                    >
+                      <td className="px-2 py-1.5">
+                        <span className={cn(
+                          "text-xs font-mono font-semibold",
+                          isShared ? "text-[#16A34A]" : isExclusive ? "text-[#D97706]" : "text-[#1A1A1A]"
+                        )}>
+                          {ticker}
+                        </span>
+                      </td>
+                      {selectedPortfolios.map((p, idx) => {
+                        const has = owners.includes(p.userId);
+                        const rc = ringColors[idx % ringColors.length];
+                        return (
+                          <td key={p.userId} className="px-2 py-1.5 text-center">
+                            {has ? (
+                              <span className={cn("inline-block h-3 w-3 rounded-full", rc.dot)} />
+                            ) : (
+                              <span className="inline-block h-3 w-3 rounded-full border border-[#E8E6E1]" />
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-2 py-1.5 text-center">
+                        {isShared ? (
+                          <span className="text-[9px] font-medium text-[#16A34A] bg-[#16A34A]/10 rounded-full px-1.5 py-0.5">
+                            Todos
+                          </span>
+                        ) : isExclusive && exclusiveOwner ? (
+                          <span className={cn("text-[9px] font-medium rounded-full px-1.5 py-0.5 bg-[#D97706]/10", ringColors[exclusiveOwner.colorIdx % ringColors.length].label)}>
+                            Só {exclusiveOwner.name}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold tabular-nums text-[#9CA3AF]">
+                            {count}/{selectedPortfolios.length}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -244,6 +300,11 @@ export function PortfolioRing() {
             <div className="text-center">
               <p className="text-xl font-bold text-[#16A34A]">{sharedStocks.length}</p>
               <p className="text-[9px] text-[#9CA3AF] uppercase tracking-wider">Em comum</p>
+              {sharedStocks.length > 0 && (
+                <p className="text-[10px] text-[#16A34A] font-mono mt-1">
+                  {sharedStocks.map((s) => s.ticker).join(", ")}
+                </p>
+              )}
             </div>
             <div className="text-center">
               <p className="text-xl font-bold text-[#1A1A1A]">{allStocks.length}</p>
@@ -252,7 +313,33 @@ export function PortfolioRing() {
             <div className="text-center">
               <p className="text-xl font-bold text-[#D97706]">{exclusiveStocks.length}</p>
               <p className="text-[9px] text-[#9CA3AF] uppercase tracking-wider">Exclusivos</p>
+              {exclusiveStocks.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-1 mt-1">
+                  {exclusiveStocks.map((s) => {
+                    const owner = exclusiveMap.get(s.ticker);
+                    const rc = owner ? ringColors[owner.colorIdx % ringColors.length] : ringColors[0];
+                    return (
+                      <span key={s.ticker} className={cn("text-[9px] font-mono font-medium", rc.label)}>
+                        {s.ticker}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-[#E8E6E1]/50">
+            <span className="flex items-center gap-1 text-[9px] text-[#9CA3AF]">
+              <span className="h-2 w-6 rounded-full bg-[#16A34A]/10" /> Todos têm
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-[#9CA3AF]">
+              <span className="h-2 w-6 rounded-full bg-[#D97706]/10" /> Exclusivo
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-[#9CA3AF]">
+              <span className="h-2 w-6 rounded-full bg-white border border-[#E8E6E1]" /> Parcial
+            </span>
           </div>
         </div>
       )}
@@ -263,7 +350,7 @@ export function PortfolioRing() {
         </div>
       )}
 
-      {selectedPortfolios.length === 0 && (
+      {selectedPortfolios.length === 0 && portfolios.length > 0 && (
         <div className="p-5 text-center text-sm text-[#9CA3AF]">
           Selecione participantes acima para iniciar a comparação.
         </div>
