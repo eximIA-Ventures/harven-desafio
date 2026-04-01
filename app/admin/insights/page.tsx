@@ -1,46 +1,42 @@
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
-import { eq, desc, sql, count } from "drizzle-orm";
+import { eq, desc, sql, count, asc, ne } from "drizzle-orm";
 import {
-  BarChart3,
   Users,
   MousePointerClick,
   TrendingUp,
   Clock,
   Smartphone,
   Hash,
+  CheckCircle2,
+  XCircle,
+  User,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const modelLabels: Record<number, { label: string; color: string; bg: string }> = {
+  1: { label: "Conservador", color: "text-blue-600", bg: "bg-blue-50" },
+  2: { label: "Moderado", color: "text-emerald-600", bg: "bg-emerald-50" },
+  3: { label: "Arrojado", color: "text-orange-600", bg: "bg-orange-50" },
+  4: { label: "Agressivo", color: "text-red-600", bg: "bg-red-50" },
+};
 
 export default async function InsightsPage() {
   const session = await getSession();
   if (!session || session.type !== "admin") redirect("/login");
 
-  // Total events
+  // === KPIs ===
   const [totalEvents] = await db
     .select({ value: count() })
     .from(schema.events);
 
-  // Total unique users who triggered events
   const [uniqueUsers] = await db
     .select({ value: sql<number>`COUNT(DISTINCT ${schema.events.userId})` })
     .from(schema.events);
 
-  // Events by type
-  const eventsByType = await db
-    .select({
-      event: schema.events.event,
-      total: count(),
-    })
-    .from(schema.events)
-    .groupBy(schema.events.event)
-    .orderBy(desc(count()));
-
-  // Logins by method (cpf vs phone)
   const loginEvents = await db
-    .select({
-      metadata: schema.events.metadata,
-    })
+    .select({ metadata: schema.events.metadata })
     .from(schema.events)
     .where(eq(schema.events.event, "login"));
 
@@ -54,63 +50,14 @@ export default async function InsightsPage() {
     } catch {}
   }
 
-  // Most popular allocation models
-  const modelEvents = await db
-    .select({ metadata: schema.events.metadata })
+  // Events by type
+  const eventsByType = await db
+    .select({ event: schema.events.event, total: count() })
     .from(schema.events)
-    .where(eq(schema.events.event, "model_select"));
+    .groupBy(schema.events.event)
+    .orderBy(desc(count()));
 
-  const modelCounts: Record<string, number> = {};
-  for (const e of modelEvents) {
-    try {
-      const m = JSON.parse(e.metadata ?? "{}");
-      const label = m.label ?? `Modelo ${m.model}`;
-      modelCounts[label] = (modelCounts[label] ?? 0) + 1;
-    } catch {}
-  }
-  const modelRanking = Object.entries(modelCounts).sort((a, b) => b[1] - a[1]);
-
-  // Most selected stocks (from portfolio_submit events)
-  const submitEvents = await db
-    .select({ metadata: schema.events.metadata })
-    .from(schema.events)
-    .where(eq(schema.events.event, "portfolio_submit"));
-
-  const stockCounts: Record<string, number> = {};
-  for (const e of submitEvents) {
-    try {
-      const m = JSON.parse(e.metadata ?? "{}");
-      for (const ticker of m.stocks ?? []) {
-        stockCounts[ticker] = (stockCounts[ticker] ?? 0) + 1;
-      }
-    } catch {}
-  }
-  const topStocks = Object.entries(stockCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  // Recent events (last 20)
-  const recentEvents = await db.query.events.findMany({
-    orderBy: desc(schema.events.createdAt),
-    limit: 20,
-  });
-
-  // Funnel: register_start → register_complete
-  const [registerStarts] = await db
-    .select({ value: count() })
-    .from(schema.events)
-    .where(eq(schema.events.event, "register_start"));
-  const [registerCompletes] = await db
-    .select({ value: count() })
-    .from(schema.events)
-    .where(eq(schema.events.event, "register_complete"));
-
-  const funnelRate =
-    registerStarts.value > 0
-      ? ((registerCompletes.value / registerStarts.value) * 100).toFixed(0)
-      : "—";
-
-  // Events per day (last 7 days)
+  // Daily activity (last 7 days)
   const dailyEvents = await db
     .select({
       day: sql<string>`DATE(${schema.events.createdAt})`,
@@ -121,6 +68,97 @@ export default async function InsightsPage() {
     .orderBy(desc(sql`DATE(${schema.events.createdAt})`))
     .limit(7);
 
+  // Funnel
+  const [registerStarts] = await db
+    .select({ value: count() })
+    .from(schema.events)
+    .where(eq(schema.events.event, "register_start"));
+  const [registerCompletes] = await db
+    .select({ value: count() })
+    .from(schema.events)
+    .where(eq(schema.events.event, "register_complete"));
+  const funnelRate =
+    registerStarts.value > 0
+      ? ((registerCompletes.value / registerStarts.value) * 100).toFixed(0)
+      : "—";
+
+  // === USER-LEVEL DATA ===
+  const currentCycle = await db.query.cycles.findFirst({
+    where: ne(schema.cycles.status, "liquidated"),
+    orderBy: [desc(schema.cycles.year), desc(schema.cycles.month)],
+  });
+
+  const allParticipants = await db.query.users.findMany({
+    where: eq(schema.users.type, "participant"),
+    orderBy: asc(schema.users.name),
+  });
+
+  // Portfolios for current cycle
+  const currentPortfolios = currentCycle
+    ? await db.query.portfolios.findMany({
+        where: eq(schema.portfolios.cycleId, currentCycle.id),
+        with: { stocks: true },
+      })
+    : [];
+  const portfolioByUser = new Map(currentPortfolios.map((p) => [p.userId, p]));
+
+  // Events per user
+  const userEvents = await db
+    .select({
+      userId: schema.events.userId,
+      event: schema.events.event,
+      total: count(),
+    })
+    .from(schema.events)
+    .groupBy(schema.events.userId, schema.events.event);
+
+  const userEventMap = new Map<string, Record<string, number>>();
+  for (const ue of userEvents) {
+    if (!ue.userId) continue;
+    if (!userEventMap.has(ue.userId)) userEventMap.set(ue.userId, {});
+    userEventMap.get(ue.userId)![ue.event] = ue.total;
+  }
+
+  // Last activity per user
+  const lastActivity = await db
+    .select({
+      userId: schema.events.userId,
+      lastSeen: sql<Date>`MAX(${schema.events.createdAt})`,
+    })
+    .from(schema.events)
+    .groupBy(schema.events.userId);
+  const lastSeenMap = new Map(lastActivity.map((l) => [l.userId, l.lastSeen]));
+
+  // Build user profiles
+  const userProfiles = allParticipants.map((u) => {
+    const events = userEventMap.get(u.id) ?? {};
+    const portfolio = portfolioByUser.get(u.id);
+    const lastSeen = lastSeenMap.get(u.id);
+    const totalActions = Object.values(events).reduce((s, n) => s + n, 0);
+
+    return {
+      id: u.id,
+      name: u.name,
+      curso: u.curso,
+      sala: u.sala,
+      hasPortfolio: !!portfolio,
+      allocationModel: portfolio?.allocationModel ?? null,
+      stocks: portfolio
+        ? portfolio.stocks.sort((a, b) => a.position - b.position).map((s) => s.ticker)
+        : [],
+      logins: (events.login ?? 0) + (events.register_complete ?? 0),
+      modelChanges: events.model_select ?? 0,
+      submissions: (events.portfolio_submit ?? 0) + (events.portfolio_update ?? 0),
+      totalActions,
+      lastSeen,
+      hasAnyEvent: totalActions > 0,
+    };
+  });
+
+  const withPortfolio = userProfiles.filter((u) => u.hasPortfolio).length;
+  const withEvents = userProfiles.filter((u) => u.hasAnyEvent).length;
+  const ghost = userProfiles.filter((u) => !u.hasAnyEvent && !u.hasPortfolio).length;
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-8">
@@ -129,6 +167,7 @@ export default async function InsightsPage() {
         </h1>
         <p className="mt-1 text-sm text-[#9CA3AF]">
           Monitoramento de engajamento e comportamento
+          {currentCycle && ` · ${currentCycle.label}`}
         </p>
       </div>
 
@@ -139,17 +178,15 @@ export default async function InsightsPage() {
             <MousePointerClick className="h-3.5 w-3.5" />
             Total eventos
           </div>
-          <p className="text-2xl font-bold text-[#1A1A1A]">
-            {totalEvents.value}
-          </p>
+          <p className="text-2xl font-bold text-[#1A1A1A]">{totalEvents.value}</p>
         </div>
         <div className="rounded-xl border border-[#E8E6E1] bg-white p-4">
           <div className="flex items-center gap-2 text-[#9CA3AF] text-xs mb-1">
             <Users className="h-3.5 w-3.5" />
-            Usuários ativos
+            Engajados / Total
           </div>
           <p className="text-2xl font-bold text-[#1A1A1A]">
-            {uniqueUsers.value}
+            {withEvents}<span className="text-sm text-[#9CA3AF] font-normal"> / {allParticipants.length}</span>
           </p>
         </div>
         <div className="rounded-xl border border-[#E8E6E1] bg-white p-4">
@@ -189,18 +226,11 @@ export default async function InsightsPage() {
                 return (
                   <div key={e.event}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-mono text-[#5C5C5C]">
-                        {e.event}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-[#1A1A1A] tabular-nums">
-                        {e.total}
-                      </span>
+                      <span className="text-xs font-mono text-[#5C5C5C]">{e.event}</span>
+                      <span className="text-xs font-mono font-bold text-[#1A1A1A] tabular-nums">{e.total}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-[#F5F4F0]">
-                      <div
-                        className="h-1.5 rounded-full bg-[#C6AD7C]"
-                        style={{ width: `${pct}%` }}
-                      />
+                      <div className="h-1.5 rounded-full bg-[#C6AD7C]" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -225,20 +255,14 @@ export default async function InsightsPage() {
                   <div key={d.day}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-[#5C5C5C]">
-                        {new Date(d.day + "T12:00:00").toLocaleDateString(
-                          "pt-BR",
-                          { weekday: "short", day: "2-digit", month: "2-digit" }
-                        )}
+                        {new Date(d.day + "T12:00:00").toLocaleDateString("pt-BR", {
+                          weekday: "short", day: "2-digit", month: "2-digit",
+                        })}
                       </span>
-                      <span className="text-xs font-mono font-bold text-[#1A1A1A] tabular-nums">
-                        {d.total}
-                      </span>
+                      <span className="text-xs font-mono font-bold text-[#1A1A1A] tabular-nums">{d.total}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-[#F5F4F0]">
-                      <div
-                        className="h-1.5 rounded-full bg-[#16A34A]"
-                        style={{ width: `${pct}%` }}
-                      />
+                      <div className="h-1.5 rounded-full bg-[#16A34A]" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -246,60 +270,121 @@ export default async function InsightsPage() {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Model popularity */}
-        <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF] mb-4">
-            Modelos mais escolhidos
-          </p>
-          {modelRanking.length === 0 ? (
-            <p className="text-sm text-[#D9D7D2]">Sem dados</p>
-          ) : (
-            <div className="space-y-2.5">
-              {modelRanking.map(([label, cnt]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between"
-                >
-                  <span className="text-sm text-[#5C5C5C]">{label}</span>
-                  <span className="text-sm font-mono font-bold text-[#1A1A1A] tabular-nums">
-                    {cnt}x
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* User-level engagement table */}
+      <div className="rounded-xl border border-[#E8E6E1] bg-white overflow-hidden mb-8">
+        <div className="px-5 py-3 bg-[#FAFAF8] border-b border-[#E8E6E1] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-[#9CA3AF]" />
+            <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
+              Engajamento por usuário
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] text-[#9CA3AF]">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#16A34A]" />
+              Enviou ({withPortfolio})
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#D97706]" />
+              Acessou ({withEvents - withPortfolio > 0 ? withEvents - withPortfolio : 0})
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#E8E6E1]" />
+              Inativo ({ghost})
+            </span>
+          </div>
         </div>
-
-        {/* Top stocks */}
-        <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF] mb-4">
-            Ações mais submetidas
-          </p>
-          {topStocks.length === 0 ? (
-            <p className="text-sm text-[#D9D7D2]">Sem dados</p>
-          ) : (
-            <div className="space-y-2">
-              {topStocks.map(([ticker, cnt], i) => (
-                <div
-                  key={ticker}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[#D9D7D2] w-4 tabular-nums">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-mono font-semibold text-[#1A1A1A]">
-                      {ticker}
-                    </span>
-                  </div>
-                  <span className="text-sm font-mono text-[#9CA3AF] tabular-nums">
-                    {cnt}x
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-[#E8E6E1] bg-[#FAFAF8]/50">
+                <th className="px-4 py-2.5 text-left text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Participante
+                </th>
+                <th className="px-3 py-2.5 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Carteira
+                </th>
+                <th className="px-3 py-2.5 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Modelo
+                </th>
+                <th className="px-3 py-2.5 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Logins
+                </th>
+                <th className="px-3 py-2.5 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Mudanças modelo
+                </th>
+                <th className="px-3 py-2.5 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Envios
+                </th>
+                <th className="px-3 py-2.5 text-center text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Total ações
+                </th>
+                <th className="px-3 py-2.5 text-right text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+                  Última atividade
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {userProfiles.map((u) => {
+                const model = u.allocationModel ? modelLabels[u.allocationModel] : null;
+                return (
+                  <tr key={u.id} className="border-b border-[#E8E6E1]/50 last:border-0">
+                    <td className="px-4 py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-[#1A1A1A]">{u.name}</p>
+                        <p className="text-[10px] text-[#9CA3AF]">
+                          {u.curso ?? "—"}
+                          {u.sala ? ` · ${u.sala}` : ""}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      {u.hasPortfolio ? (
+                        <CheckCircle2 className="h-4 w-4 text-[#16A34A] mx-auto" />
+                      ) : u.hasAnyEvent ? (
+                        <XCircle className="h-4 w-4 text-[#D97706] mx-auto" />
+                      ) : (
+                        <span className="h-4 w-4 rounded-full border-2 border-[#E8E6E1] block mx-auto" />
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      {model ? (
+                        <span className={cn("text-[10px] font-medium rounded-full px-2 py-0.5", model.bg, model.color)}>
+                          {model.label}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#D9D7D2]">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs font-mono tabular-nums text-[#5C5C5C]">
+                      {u.logins || <span className="text-[#E8E6E1]">0</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs font-mono tabular-nums text-[#5C5C5C]">
+                      {u.modelChanges || <span className="text-[#E8E6E1]">0</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs font-mono tabular-nums text-[#5C5C5C]">
+                      {u.submissions || <span className="text-[#E8E6E1]">0</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs font-mono tabular-nums text-[#5C5C5C]">
+                      {u.totalActions || <span className="text-[#E8E6E1]">0</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[10px] text-[#9CA3AF] tabular-nums whitespace-nowrap">
+                      {u.lastSeen
+                        ? new Date(u.lastSeen).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -307,7 +392,7 @@ export default async function InsightsPage() {
       <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
         <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF] mb-4">
           <Clock className="inline h-3.5 w-3.5 mr-1" />
-          Últimos eventos
+          Últimos 30 eventos
         </p>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -317,10 +402,10 @@ export default async function InsightsPage() {
                   Quando
                 </th>
                 <th className="px-3 py-2 text-left text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
-                  Evento
+                  Usuário
                 </th>
                 <th className="px-3 py-2 text-left text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
-                  Página
+                  Evento
                 </th>
                 <th className="px-3 py-2 text-left text-[9px] font-medium uppercase tracking-wider text-[#9CA3AF]">
                   Detalhes
@@ -328,28 +413,26 @@ export default async function InsightsPage() {
               </tr>
             </thead>
             <tbody>
-              {(recentEvents as { id: string; event: string; page: string | null; metadata: string | null; createdAt: Date }[]).map((e) => (
-                <tr
-                  key={e.id}
-                  className="border-b border-[#E8E6E1]/50 last:border-0"
-                >
+              {(await db.query.events.findMany({
+                orderBy: desc(schema.events.createdAt),
+                limit: 30,
+                with: { user: true },
+              })).map((e) => (
+                <tr key={e.id} className="border-b border-[#E8E6E1]/50 last:border-0">
                   <td className="px-3 py-2 text-[11px] text-[#9CA3AF] whitespace-nowrap tabular-nums">
                     {new Date(e.createdAt).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
+                      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
                     })}
+                  </td>
+                  <td className="px-3 py-2 text-[11px] text-[#5C5C5C] whitespace-nowrap">
+                    {e.user?.name ?? <span className="text-[#D9D7D2]">anônimo</span>}
                   </td>
                   <td className="px-3 py-2">
                     <span className="inline-flex items-center rounded-md bg-[#F5F4F0] px-2 py-0.5 text-[10px] font-mono font-medium text-[#5C5C5C]">
                       {e.event}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-[11px] text-[#9CA3AF] font-mono">
-                    {e.page ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-[11px] text-[#9CA3AF] font-mono max-w-[200px] truncate">
+                  <td className="px-3 py-2 text-[11px] text-[#9CA3AF] font-mono max-w-[250px] truncate">
                     {e.metadata ?? "—"}
                   </td>
                 </tr>
