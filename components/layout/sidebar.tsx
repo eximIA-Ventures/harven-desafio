@@ -12,6 +12,7 @@ import {
   X,
   LayoutDashboard,
   BarChart3,
+  GitCompareArrows,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,6 +37,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/ranking", label: "Ranking", icon: Trophy },
   { href: "/admin/participantes", label: "Participantes", icon: Users },
   { href: "/admin/ciclos", label: "Ciclos Mensais", icon: CalendarClock },
+  { href: "/admin/comparar", label: "Comparar", icon: GitCompareArrows },
   { href: "/admin/insights", label: "Insights", icon: BarChart3 },
 ];
 
