@@ -93,7 +93,6 @@ export default async function InsightsPage() {
   const recentEvents = await db.query.events.findMany({
     orderBy: desc(schema.events.createdAt),
     limit: 20,
-    with: { user: true } as never,
   });
 
   // Funnel: register_start → register_complete

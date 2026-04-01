@@ -120,11 +120,15 @@ export const monthlyPricesRelations = relations(monthlyPrices, ({ one }) => ({
 export const events = pgTable("dc_events", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").references(() => users.id),
-  event: text("event").notNull(), // page_view, login, portfolio_submit, stock_select, model_select, etc.
+  event: text("event").notNull(),
   page: text("page"),
-  metadata: text("metadata"), // JSON string for extra data
+  metadata: text("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const eventsRelations = relations(events, ({ one }) => ({
+  user: one(users, { fields: [events.userId], references: [users.id] }),
+}));
 
 // --- Composição do Ibovespa ---
 

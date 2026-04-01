@@ -12,6 +12,7 @@ import {
   Zap,
   ExternalLink,
   Clock,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StockLogo } from "@/components/desafio/stock-logo";
@@ -144,6 +145,8 @@ export default function MinhaCarteiraPage() {
   const [cycleLabel, setCycleLabel] = useState<string | null>(null);
   const [cycleDeadline, setCycleDeadline] = useState<string | null>(null);
   const [existingPortfolio, setExistingPortfolio] = useState(false);
+  const [history, setHistory] = useState<{ cycleLabel: string; allocationModel: number; stocks: string[]; submittedAt: string }[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Fetch IBOV composition + existing portfolio
   useEffect(() => {
@@ -168,6 +171,11 @@ export default function MinhaCarteiraPage() {
           setExistingPortfolio(true);
         }
       })
+      .catch(() => {});
+
+    fetch("/api/portfolio/history")
+      .then((res) => res.json())
+      .then((data) => setHistory(data.history ?? []))
       .catch(() => {});
   }, []);
 
@@ -301,7 +309,7 @@ export default function MinhaCarteiraPage() {
                   : `Faltam ${diffDays} dias para o fechamento`}
               </p>
               <p className="text-[11px] text-[#9CA3AF]">
-                Prazo: {deadline.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })} às 18h
+                Prazo: {deadline.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })} às 00h
               </p>
             </div>
           </div>
@@ -330,13 +338,71 @@ export default function MinhaCarteiraPage() {
         </div>
       )}
 
+      {/* Import from previous cycle */}
+      {history.length > 0 && !existingPortfolio && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setShowHistory(!showHistory)}
+            className="inline-flex items-center gap-1.5 text-xs text-[#C6AD7C] hover:text-[#B59C6B] transition-colors cursor-pointer"
+          >
+            <History className="h-3.5 w-3.5" />
+            {showHistory ? "Fechar histórico" : "Importar carteira anterior"}
+          </button>
+          {showHistory && (
+            <div className="mt-3 space-y-2">
+              {history
+                .filter((h) => h.cycleLabel !== cycleLabel)
+                .map((h, i) => {
+                const modelLabel = ["", "Conservador", "Moderado", "Arrojado", "Agressivo"][h.allocationModel] ?? "";
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-xl border border-[#E8E6E1] bg-white px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[#1A1A1A]">
+                        {h.cycleLabel}
+                        <span className="ml-2 text-[10px] text-[#9CA3AF] font-normal">
+                          {modelLabel}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-[#9CA3AF] font-mono truncate mt-0.5">
+                        {h.stocks.join(" · ")}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedModel(h.allocationModel);
+                        setSelectedStocks(h.stocks);
+                        setShowHistory(false);
+                        setSubmitted(false);
+                        setSubmitMessage("");
+                        track("import_portfolio", { from: h.cycleLabel });
+                      }}
+                      className="ml-3 shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#C6AD7C]/30 bg-[#C6AD7C]/10 px-3 py-1.5 text-[10px] font-medium text-[#C6AD7C] hover:bg-[#C6AD7C]/20 transition-colors cursor-pointer"
+                    >
+                      Usar como base
+                    </button>
+                  </div>
+                );
+              })}
+              {history.filter((h) => h.cycleLabel !== cycleLabel).length === 0 && (
+                <p className="text-xs text-[#9CA3AF]">Nenhuma carteira anterior encontrada.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Como funciona — only show for new users */}
-      {!existingPortfolio && (
+      {!existingPortfolio && history.length === 0 && (
         <div className="mb-8 flex gap-3 overflow-x-auto pb-1">
           {[
             { n: "1", t: "Modelo", d: "Escolha o perfil de alocação" },
             { n: "2", t: "10 Ações", d: "Selecione do Ibovespa vigente" },
-            { n: "3", t: "Envie", d: "Até 18h do último dia do mês" },
+            { n: "3", t: "Envie", d: "Até o dia 1 do mês seguinte" },
             { n: "4", t: "Ranking", d: "Compare com IBOV e colegas" },
           ].map((s) => (
             <div
