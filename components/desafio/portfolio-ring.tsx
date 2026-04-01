@@ -335,17 +335,92 @@ export function PortfolioRing() {
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-[#E8E6E1]/50">
-            <span className="flex items-center gap-1 text-[9px] text-[#9CA3AF]">
-              <span className="h-2 w-6 rounded-full bg-[#16A34A]/10" /> Todos têm
-            </span>
-            <span className="flex items-center gap-1 text-[9px] text-[#9CA3AF]">
-              <span className="h-2 w-6 rounded-full bg-[#D97706]/10" /> Exclusivo
-            </span>
-            <span className="flex items-center gap-1 text-[9px] text-[#9CA3AF]">
-              <span className="h-2 w-6 rounded-full bg-white border border-[#E8E6E1]" /> Parcial
-            </span>
+          {/* Venn chart */}
+          <div className="mt-4 pt-4 border-t border-[#E8E6E1]">
+            <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider font-medium mb-3">
+              Distribuição
+            </p>
+            {(() => {
+              const total = allStocks.length;
+              if (total === 0) return null;
+              const sharedPct = (sharedStocks.length / total) * 100;
+              const partialPct = (partialStocks.length / total) * 100;
+              const exclusivePct = (exclusiveStocks.length / total) * 100;
+              return (
+                <div>
+                  {/* Stacked bar */}
+                  <div className="h-6 rounded-lg overflow-hidden flex">
+                    {sharedPct > 0 && (
+                      <div className="bg-[#16A34A] flex items-center justify-center" style={{ width: `${sharedPct}%` }}>
+                        <span className="text-[9px] font-bold text-white">{sharedStocks.length}</span>
+                      </div>
+                    )}
+                    {partialPct > 0 && (
+                      <div className="bg-[#9CA3AF] flex items-center justify-center" style={{ width: `${partialPct}%` }}>
+                        <span className="text-[9px] font-bold text-white">{partialStocks.length}</span>
+                      </div>
+                    )}
+                    {exclusivePct > 0 && (
+                      <div className="bg-[#D97706] flex items-center justify-center" style={{ width: `${exclusivePct}%` }}>
+                        <span className="text-[9px] font-bold text-white">{exclusiveStocks.length}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Legend */}
+                  <div className="flex items-center justify-center gap-4 mt-2">
+                    <span className="flex items-center gap-1.5 text-[10px] text-[#5C5C5C]">
+                      <span className="h-2.5 w-2.5 rounded-sm bg-[#16A34A]" />
+                      Em comum ({sharedStocks.length})
+                    </span>
+                    {partialStocks.length > 0 && (
+                      <span className="flex items-center gap-1.5 text-[10px] text-[#5C5C5C]">
+                        <span className="h-2.5 w-2.5 rounded-sm bg-[#9CA3AF]" />
+                        Parcial ({partialStocks.length})
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1.5 text-[10px] text-[#5C5C5C]">
+                      <span className="h-2.5 w-2.5 rounded-sm bg-[#D97706]" />
+                      Exclusivo ({exclusiveStocks.length})
+                    </span>
+                  </div>
+
+                  {/* Per-participant breakdown */}
+                  <div className="mt-3 space-y-1.5">
+                    {selectedPortfolios.map((p, idx) => {
+                      const rc = ringColors[idx % ringColors.length];
+                      const pExclusive = exclusiveStocks.filter((s) => s.owners.includes(p.userId));
+                      const pShared = sharedStocks.length;
+                      const pPartial = p.stocks.length - pExclusive.length - pShared;
+                      return (
+                        <div key={p.userId}>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className={cn("h-2.5 w-2.5 rounded-full", rc.dot)} />
+                              <span className="text-[10px] font-medium text-[#1A1A1A]">
+                                {p.name.split(" ")[0]}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-[#9CA3AF]">
+                              {pExclusive.length} exclusivo{pExclusive.length !== 1 ? "s" : ""}
+                              {pExclusive.length > 0 && (
+                                <span className="ml-1 font-mono text-[9px] text-[#D97706]">
+                                  ({pExclusive.map((s) => s.ticker).join(", ")})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full overflow-hidden flex bg-[#F5F4F0]">
+                            <div className="bg-[#16A34A]" style={{ width: `${(pShared / 10) * 100}%` }} />
+                            {pPartial > 0 && <div className="bg-[#9CA3AF]" style={{ width: `${(pPartial / 10) * 100}%` }} />}
+                            <div className="bg-[#D97706]" style={{ width: `${(pExclusive.length / 10) * 100}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
