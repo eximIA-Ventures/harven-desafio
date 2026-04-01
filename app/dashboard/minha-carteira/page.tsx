@@ -275,8 +275,8 @@ export default function MinhaCarteiraPage() {
         </div>
       </div>
 
-      {/* History section — inline, not popup */}
-      {history.filter((h) => h.cycleLabel !== cycleLabel).length > 0 && (
+      {/* History section — always visible */}
+      {history.length > 0 && (
         <div className="mb-6 rounded-2xl border border-[#E8E6E1] bg-white overflow-hidden">
           <button
             type="button"
@@ -289,7 +289,7 @@ export default function MinhaCarteiraPage() {
                 Minhas carteiras anteriores
               </span>
               <span className="text-[10px] text-[#9CA3AF] bg-[#F5F4F0] rounded-full px-2 py-0.5">
-                {history.filter((h) => h.cycleLabel !== cycleLabel).length}
+                {history.length}
               </span>
             </div>
             {showHistory
@@ -299,9 +299,7 @@ export default function MinhaCarteiraPage() {
           </button>
           {showHistory && (
             <div className="border-t border-[#E8E6E1]">
-              {history
-                .filter((h) => h.cycleLabel !== cycleLabel)
-                .map((h, i) => {
+              {history.map((h, i) => {
                   const modelLabel = ["", "Conservador", "Moderado", "Arrojado", "Agressivo"][h.allocationModel] ?? "";
                   const isEditable = h.cycleStatus !== "liquidated";
                   const modelColor: Record<number, { bg: string; text: string; border: string }> = {
@@ -335,28 +333,27 @@ export default function MinhaCarteiraPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2 ml-3 shrink-0">
-                        {/* Import: use as base for current cycle */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedModel(h.allocationModel);
-                            setSelectedStocks(h.stocks);
-                            setSubmitted(false);
-                            setSubmitMessage("");
-                            track("import_portfolio", { from: h.cycleLabel });
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[#E8E6E1] bg-white px-2.5 py-1.5 text-[10px] font-medium text-[#5C5C5C] hover:bg-[#F5F4F0] transition-colors cursor-pointer"
-                          title="Usar como base para o ciclo atual"
-                        >
-                          <Copy className="h-3 w-3" />
-                          Usar como base
-                        </button>
-                        {/* Edit: go to that cycle to edit (only if not liquidated) */}
+                        {h.cycleLabel !== cycleLabel && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedModel(h.allocationModel);
+                              setSelectedStocks(h.stocks);
+                              setSubmitted(false);
+                              setSubmitMessage("");
+                              track("import_portfolio", { from: h.cycleLabel });
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#E8E6E1] bg-white px-2.5 py-1.5 text-[10px] font-medium text-[#5C5C5C] hover:bg-[#F5F4F0] transition-colors cursor-pointer"
+                            title="Usar como base para o ciclo atual"
+                          >
+                            <Copy className="h-3 w-3" />
+                            Usar como base
+                          </button>
+                        )}
                         {isEditable && (
                           <button
                             type="button"
                             onClick={() => {
-                              // Load this portfolio for editing by switching cycle context
                               setSelectedModel(h.allocationModel);
                               setSelectedStocks(h.stocks);
                               setExistingPortfolio(true);
