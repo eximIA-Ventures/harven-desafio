@@ -162,106 +162,168 @@ export default async function CompararPage() {
         })}
       </div>
 
+      {/* Model distribution donut + stock bar chart */}
       <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {/* Stock popularity chart */}
+        {/* Model donut */}
         <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
-          <div className="flex items-center gap-2 mb-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF] mb-4">
+            Distribuição de modelos
+          </p>
+          <div className="flex items-center gap-6">
+            <svg width="120" height="120" viewBox="0 0 100 100" className="transform -rotate-90 shrink-0">
+              {(() => {
+                const r = 38, circ = 2 * Math.PI * r;
+                let cum = 0;
+                const colors = ["#3B82F6", "#10B981", "#F59E0B", "#DC2626"];
+                return [1,2,3,4].map((m, i) => {
+                  const cnt = modelCount[m] ?? 0;
+                  if (cnt === 0) return null;
+                  const pct = cnt / portfolios.length;
+                  const len = pct * circ;
+                  const off = cum * circ;
+                  cum += pct;
+                  return <circle key={m} cx="50" cy="50" r={r} fill="none" stroke={colors[i]} strokeWidth="14" strokeDasharray={`${len} ${circ - len}`} strokeDashoffset={-off} />;
+                });
+              })()}
+            </svg>
+            <div className="space-y-2">
+              {[1,2,3,4].map((m) => {
+                const ml = modelLabels[m];
+                const cnt = modelCount[m] ?? 0;
+                const pct = portfolios.length > 0 ? ((cnt / portfolios.length) * 100).toFixed(0) : "0";
+                return (
+                  <div key={m} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("h-2.5 w-2.5 rounded-sm", m === 1 ? "bg-[#3B82F6]" : m === 2 ? "bg-[#10B981]" : m === 3 ? "bg-[#F59E0B]" : "bg-[#DC2626]")} />
+                      <span className="text-xs text-[#5C5C5C]">{ml.label}</span>
+                    </div>
+                    <span className="text-xs font-bold text-[#1A1A1A] tabular-nums">{cnt} ({pct}%)</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick stats */}
+        <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
+          <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF] mb-4">
+            Estatísticas gerais
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-2xl font-bold text-[#1A1A1A]">{portfolios.length}</p>
+              <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">Carteiras enviadas</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-[#1A1A1A]">{stockRanking.length}</p>
+              <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">Papéis distintos</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-[#D97706]">{uniqueStocks.length}</p>
+              <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">Apostas exclusivas</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-[#16A34A]">
+                {stockRanking[0] ? `${((stockRanking[0][1] / portfolios.length) * 100).toFixed(0)}%` : "—"}
+              </p>
+              <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">
+                {stockRanking[0]?.[0] ?? "—"} (mais popular)
+              </p>
+            </div>
+          </div>
+          {/* Concentration bar */}
+          <div className="mt-4 pt-4 border-t border-[#E8E6E1]">
+            <p className="text-[10px] text-[#9CA3AF] mb-2">Concentração: top 5 papéis cobrem</p>
+            {(() => {
+              const top5selections = stockRanking.slice(0, 5).reduce((s, [, c]) => s + c, 0);
+              const totalSelections = portfolios.length * 10;
+              const top5pct = totalSelections > 0 ? ((top5selections / totalSelections) * 100).toFixed(0) : "0";
+              return (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-3 rounded-full bg-[#F5F4F0]">
+                      <div className="h-3 rounded-full bg-[#C6AD7C]" style={{ width: `${top5pct}%` }} />
+                    </div>
+                    <span className="text-sm font-bold text-[#1A1A1A] tabular-nums">{top5pct}%</span>
+                  </div>
+                  <p className="text-[9px] text-[#9CA3AF] mt-1">
+                    {stockRanking.slice(0, 5).map(([t]) => t).join(", ")}
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* Full stock popularity chart */}
+      <div className="rounded-xl border border-[#E8E6E1] bg-white p-5 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4 text-[#9CA3AF]" />
             <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
-              Papéis mais selecionados
+              Todos os papéis — popularidade ({stockRanking.length} papéis)
             </p>
           </div>
-          <div className="space-y-2">
-            {stockRanking.slice(0, 15).map(([ticker, cnt], i) => {
-              const pct = (cnt / maxStockCount) * 100;
-              const presence = ((cnt / portfolios.length) * 100).toFixed(0);
+          <div className="flex items-center gap-3 text-[9px] text-[#9CA3AF]">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#C6AD7C]" /> &gt;50%</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#16A34A]" /> 20-50%</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#3B82F6]" /> &lt;20%</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#D97706]" /> Exclusivo</span>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          {stockRanking.map(([ticker, cnt], i) => {
+            const pct = (cnt / maxStockCount) * 100;
+            const presence = (cnt / portfolios.length) * 100;
+            const presenceFmt = presence.toFixed(0);
+            const isExclusive = cnt === 1;
+            return (
+              <div key={ticker} className="flex items-center gap-2">
+                <span className="text-[10px] text-[#D9D7D2] w-5 tabular-nums text-right shrink-0">{i + 1}</span>
+                <span className="text-[11px] font-mono font-semibold text-[#1A1A1A] w-16 shrink-0">{ticker}</span>
+                <div className="flex-1 h-4 rounded bg-[#F5F4F0] relative">
+                  <div
+                    className={cn(
+                      "h-4 rounded flex items-center",
+                      isExclusive ? "bg-[#D97706]" : presence > 50 ? "bg-[#C6AD7C]" : presence >= 20 ? "bg-[#16A34A]" : "bg-[#3B82F6]"
+                    )}
+                    style={{ width: `${pct}%`, minWidth: "16px" }}
+                  >
+                    <span className="text-[8px] font-bold text-white ml-1">{cnt}</span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-[#9CA3AF] tabular-nums w-10 text-right shrink-0">
+                  {presenceFmt}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Exclusive picks with owner names */}
+      {uniqueStocks.length > 0 && (
+        <div className="rounded-xl border border-[#D97706]/20 bg-[#D97706]/[0.03] p-5 mb-8">
+          <p className="text-xs font-medium uppercase tracking-wider text-[#D97706] mb-3">
+            Apostas exclusivas — só 1 pessoa escolheu ({uniqueStocks.length})
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {uniqueStocks.map(([ticker]) => {
+              const owner = portfolios.find((p) => p.stocks.some((s) => s.ticker === ticker));
               return (
-                <div key={ticker}>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#D9D7D2] w-4 tabular-nums text-right">{i + 1}</span>
-                      <span className="text-xs font-mono font-semibold text-[#1A1A1A]">{ticker}</span>
-                    </div>
-                    <span className="text-[10px] text-[#9CA3AF] tabular-nums">
-                      {cnt}x ({presence}%)
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[#F5F4F0] ml-6">
-                    <div
-                      className={cn(
-                        "h-2 rounded-full",
-                        pct === 100 ? "bg-[#C6AD7C]" : pct >= 50 ? "bg-[#16A34A]" : "bg-[#3B82F6]"
-                      )}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                <div key={ticker} className="flex items-center justify-between rounded-lg bg-white border border-[#E8E6E1] px-3 py-2">
+                  <span className="text-xs font-mono font-bold text-[#1A1A1A]">{ticker}</span>
+                  <span className="text-[10px] text-[#9CA3AF] truncate ml-2">
+                    {owner?.user.name.split(" ").slice(0, 2).join(" ") ?? "—"}
+                  </span>
                 </div>
               );
             })}
           </div>
-          {stockRanking.length > 15 && (
-            <p className="text-[10px] text-[#D9D7D2] mt-3 ml-6">
-              +{stockRanking.length - 15} papéis adicionais
-            </p>
-          )}
         </div>
-
-        {/* Unique picks + stats */}
-        <div className="space-y-6">
-          {/* Quick stats */}
-          <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="h-4 w-4 text-[#9CA3AF]" />
-              <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF]">
-                Estatísticas
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-2xl font-bold text-[#1A1A1A]">{stockRanking.length}</p>
-                <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">Papéis únicos</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#1A1A1A]">
-                  {stockRanking.length > 0 ? (portfolios.length * 10 / stockRanking.length).toFixed(1) : "0"}x
-                </p>
-                <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">Média seleções/papel</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#1A1A1A]">{uniqueStocks.length}</p>
-                <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">Escolhas exclusivas</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[#1A1A1A]">
-                  {stockRanking[0] ? `${((stockRanking[0][1] / portfolios.length) * 100).toFixed(0)}%` : "—"}
-                </p>
-                <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider">
-                  {stockRanking[0]?.[0] ?? "—"} (mais popular)
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Unique picks */}
-          {uniqueStocks.length > 0 && (
-            <div className="rounded-xl border border-[#E8E6E1] bg-white p-5">
-              <p className="text-xs font-medium uppercase tracking-wider text-[#9CA3AF] mb-3">
-                Apostas exclusivas (só 1 pessoa escolheu)
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {uniqueStocks.map(([ticker]) => (
-                  <span
-                    key={ticker}
-                    className="inline-flex items-center rounded-md bg-[#F5F4F0] px-2 py-1 text-xs font-mono font-medium text-[#5C5C5C]"
-                  >
-                    {ticker}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Duplicate portfolios */}
       {groups.length > 0 && (
