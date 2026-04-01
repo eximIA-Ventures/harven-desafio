@@ -13,6 +13,10 @@ import {
   ExternalLink,
   Clock,
   History,
+  Copy,
+  Pencil,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StockLogo } from "@/components/desafio/stock-logo";
@@ -145,8 +149,9 @@ export default function MinhaCarteiraPage() {
   const [cycleLabel, setCycleLabel] = useState<string | null>(null);
   const [cycleDeadline, setCycleDeadline] = useState<string | null>(null);
   const [existingPortfolio, setExistingPortfolio] = useState(false);
-  const [history, setHistory] = useState<{ cycleLabel: string; allocationModel: number; stocks: string[]; submittedAt: string }[]>([]);
+  const [history, setHistory] = useState<{ cycleId: string; cycleLabel: string; cycleStatus: string; allocationModel: number; stocks: string[]; submittedAt: string }[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Fetch IBOV composition + existing portfolio
   useEffect(() => {
@@ -254,8 +259,8 @@ export default function MinhaCarteiraPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#C6AD7C] to-[#B59C6B]">
             <Briefcase className="h-4 w-4 text-white" />
           </div>
@@ -268,67 +273,106 @@ export default function MinhaCarteiraPage() {
             </p>
           </div>
         </div>
+      </div>
 
-        {/* Import dropdown */}
-        {history.filter((h) => h.cycleLabel !== cycleLabel).length > 0 && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowHistory(!showHistory)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E8E6E1] bg-white px-3 py-2 text-xs font-medium text-[#5C5C5C] hover:bg-[#F5F4F0] transition-colors cursor-pointer"
-            >
-              <History className="h-3.5 w-3.5" />
-              Importar anterior
-            </button>
-            {showHistory && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowHistory(false)} />
-                <div className="absolute right-0 top-full mt-2 z-20 w-80 rounded-xl border border-[#E8E6E1] bg-white shadow-lg overflow-hidden">
-                  <div className="px-4 py-2.5 bg-[#FAFAF8] border-b border-[#E8E6E1]">
-                    <p className="text-[10px] text-[#9CA3AF] uppercase tracking-wider font-medium">
-                      Carteiras anteriores
-                    </p>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {history
-                      .filter((h) => h.cycleLabel !== cycleLabel)
-                      .map((h, i) => {
-                        const modelLabel = ["", "Conservador", "Moderado", "Arrojado", "Agressivo"][h.allocationModel] ?? "";
-                        return (
+      {/* History section — inline, not popup */}
+      {history.filter((h) => h.cycleLabel !== cycleLabel).length > 0 && (
+        <div className="mb-6 rounded-2xl border border-[#E8E6E1] bg-white overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowHistory(!showHistory)}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-[#FAFAF8] transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-[#9CA3AF]" />
+              <span className="text-sm font-medium text-[#5C5C5C]">
+                Minhas carteiras anteriores
+              </span>
+              <span className="text-[10px] text-[#9CA3AF] bg-[#F5F4F0] rounded-full px-2 py-0.5">
+                {history.filter((h) => h.cycleLabel !== cycleLabel).length}
+              </span>
+            </div>
+            {showHistory
+              ? <ChevronUp className="h-4 w-4 text-[#9CA3AF]" />
+              : <ChevronDown className="h-4 w-4 text-[#9CA3AF]" />
+            }
+          </button>
+          {showHistory && (
+            <div className="border-t border-[#E8E6E1]">
+              {history
+                .filter((h) => h.cycleLabel !== cycleLabel)
+                .map((h, i) => {
+                  const modelLabel = ["", "Conservador", "Moderado", "Arrojado", "Agressivo"][h.allocationModel] ?? "";
+                  const isEditable = h.cycleStatus !== "liquidated";
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between px-5 py-3 border-b border-[#E8E6E1]/50 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-medium text-[#1A1A1A]">
+                            {h.cycleLabel}
+                          </span>
+                          <span className="text-[10px] text-[#9CA3AF]">
+                            {modelLabel}
+                          </span>
+                          {h.cycleStatus === "liquidated" && (
+                            <span className="text-[9px] text-[#2563EB] bg-[#2563EB]/10 rounded-full px-1.5 py-0.5 uppercase tracking-wider font-medium">
+                              Liquidado
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-[#9CA3AF] font-mono truncate">
+                          {h.stocks.join(" · ")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-3 shrink-0">
+                        {/* Import: use as base for current cycle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedModel(h.allocationModel);
+                            setSelectedStocks(h.stocks);
+                            setSubmitted(false);
+                            setSubmitMessage("");
+                            track("import_portfolio", { from: h.cycleLabel });
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[#E8E6E1] bg-white px-2.5 py-1.5 text-[10px] font-medium text-[#5C5C5C] hover:bg-[#F5F4F0] transition-colors cursor-pointer"
+                          title="Usar como base para o ciclo atual"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Usar como base
+                        </button>
+                        {/* Edit: go to that cycle to edit (only if not liquidated) */}
+                        {isEditable && (
                           <button
-                            key={i}
                             type="button"
                             onClick={() => {
+                              // Load this portfolio for editing by switching cycle context
                               setSelectedModel(h.allocationModel);
                               setSelectedStocks(h.stocks);
-                              setShowHistory(false);
+                              setExistingPortfolio(true);
                               setSubmitted(false);
                               setSubmitMessage("");
-                              track("import_portfolio", { from: h.cycleLabel });
+                              setCycleLabel(h.cycleLabel);
+                              track("edit_previous_portfolio", { cycle: h.cycleLabel });
                             }}
-                            className="w-full px-4 py-3 text-left hover:bg-[#F5F4F0] transition-colors border-b border-[#E8E6E1]/50 last:border-0 cursor-pointer"
+                            className="inline-flex items-center gap-1 rounded-lg bg-[#1A1A1A] px-2.5 py-1.5 text-[10px] font-medium text-white hover:bg-[#333] transition-colors cursor-pointer"
+                            title="Editar esta carteira"
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-[#1A1A1A]">
-                                {h.cycleLabel}
-                              </span>
-                              <span className="text-[10px] text-[#9CA3AF]">
-                                {modelLabel}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-[#9CA3AF] font-mono truncate">
-                              {h.stocks.join(" · ")}
-                            </p>
+                            <Pencil className="h-3 w-3" />
+                            Editar
                           </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Deadline banner */}
       {cycleDeadline && (() => {
