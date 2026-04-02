@@ -14,23 +14,46 @@ export function DownloadRankingButton() {
       const element = document.getElementById("ranking-card");
       if (!element) return;
 
-      // Force desktop table visible for capture (hidden md:block → show it)
-      const desktopTable = element.querySelector<HTMLElement>(
-        ":scope > div.hidden"
-      );
+      // Clone the element to manipulate without affecting the page
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.position = "absolute";
+      clone.style.left = "-9999px";
+      clone.style.width = element.offsetWidth + "px";
+      document.body.appendChild(clone);
+
+      // Show desktop table in clone (it's hidden on mobile)
+      const desktopTable = clone.querySelector<HTMLElement>(":scope > div.hidden");
       if (desktopTable) desktopTable.style.display = "block";
 
-      const dataUrl = await toPng(element, {
+      // Limit to top 10 rows: remove rows after the 10th in the tbody
+      const tbody = clone.querySelector("tbody");
+      if (tbody) {
+        const rows = tbody.querySelectorAll("tr");
+        rows.forEach((row, i) => {
+          if (i >= 10) row.remove();
+        });
+      }
+
+      // Update footer to indicate top 10
+      const footer = clone.querySelector<HTMLElement>("[class*='bg-[#FAFAF8]']:last-child");
+      if (footer) {
+        const footerText = footer.querySelector("p");
+        if (footerText) {
+          footerText.textContent = `Top 10 · ${footerText.textContent}`;
+        }
+      }
+
+      const dataUrl = await toPng(clone, {
         pixelRatio: 2,
         backgroundColor: "#FFFFFF",
         cacheBust: true,
       });
 
-      // Restore responsive hiding
-      if (desktopTable) desktopTable.style.display = "";
+      // Clean up clone
+      document.body.removeChild(clone);
 
       const link = document.createElement("a");
-      link.download = "ranking-harven-finance.png";
+      link.download = "ranking-top10-harven-finance.png";
       link.href = dataUrl;
       link.click();
     } catch (error) {
@@ -51,7 +74,7 @@ export function DownloadRankingButton() {
       ) : (
         <Download className="h-4 w-4" />
       )}
-      Baixar Imagem
+      Top 10
     </button>
   );
 }
