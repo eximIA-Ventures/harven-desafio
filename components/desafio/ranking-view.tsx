@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
   Trophy,
@@ -10,6 +10,8 @@ import {
   ChevronDown,
   Crown,
   X,
+  Radio,
+  Clock,
 } from "lucide-react";
 import { PortfolioModal } from "./portfolio-modal";
 
@@ -36,6 +38,8 @@ type RankingData = {
   ibovReturn: number;
   ranking: RankingEntry[];
   stockPrices: Record<string, StockPrice>;
+  live?: boolean;
+  updatedAt?: string;
 };
 
 function formatPercent(value: number | null): string {
@@ -44,8 +48,16 @@ function formatPercent(value: number | null): string {
   return `${sign}${(value * 100).toFixed(2)}%`;
 }
 
+function formatTime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function ReturnBadge({ value }: { value: number | null }) {
-  if (value === null) return <span className="text-[#D9D7D2]">—</span>;
+  if (value === null) return <span className="text-[#D9D7D2]">---</span>;
   return (
     <span
       className={cn(
@@ -69,7 +81,29 @@ function ReturnBadge({ value }: { value: number | null }) {
   );
 }
 
-/* ── Podium for top 3 ──────────────────────────────────────────────────── */
+/* -- Live badge ----------------------------------------------------------- */
+
+function LiveBadge({ updatedAt }: { updatedAt?: string }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-[#16A34A]/10 px-2.5 py-1">
+      <Radio className="h-3 w-3 text-[#16A34A] animate-pulse" />
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-[#16A34A]">
+        Parcial
+      </span>
+      {updatedAt && (
+        <>
+          <span className="text-[#16A34A]/30">|</span>
+          <Clock className="h-2.5 w-2.5 text-[#16A34A]/60" />
+          <span className="text-[10px] text-[#16A34A]/60">
+            {formatTime(updatedAt)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* -- Podium for top 3 ----------------------------------------------------- */
 
 function Podium({ entries, ibov }: { entries: RankingEntry[]; ibov: number }) {
   const top3 = entries.slice(0, 3);
@@ -120,7 +154,7 @@ function Podium({ entries, ibov }: { entries: RankingEntry[]; ibov: number }) {
   );
 }
 
-/* ── Desktop table (always rendered for download) ──────────────────────── */
+/* -- Desktop table (always rendered for download) ------------------------- */
 
 function RankingTable({
   data,
@@ -225,7 +259,7 @@ function RankingTable({
         {/* IBOV reference */}
         <tr className="bg-[#F5F4F0] border-t border-[#E8E6E1]">
           <td className="px-5 py-3 text-center">
-            <span className="text-[10px] text-[#9CA3AF]">—</span>
+            <span className="text-[10px] text-[#9CA3AF]">---</span>
           </td>
           <td className="px-5 py-3">
             <span className="text-sm italic text-[#9CA3AF]">
@@ -236,14 +270,14 @@ function RankingTable({
           <td className="px-5 py-3 text-right text-xs font-mono tabular-nums text-[#9CA3AF]">
             {formatPercent(data.ibovReturn)}
           </td>
-          <td className="px-5 py-3 text-right text-xs text-[#9CA3AF]">—</td>
+          <td className="px-5 py-3 text-right text-xs text-[#9CA3AF]">---</td>
         </tr>
       </tbody>
     </table>
   );
 }
 
-/* ── Mobile cards ──────────────────────────────────────────────────────── */
+/* -- Mobile cards --------------------------------------------------------- */
 
 function MobileRankingCards({
   data,
@@ -313,7 +347,11 @@ function MobileRankingCards({
   );
 }
 
-/* ── Main component ────────────────────────────────────────────────────── */
+/* -- Main component ------------------------------------------------------- */
+
+const LIVE_REFRESH_INTERVAL = 1000 * 60 * 15; // 15 minutes
+
+type LiveCycle = { id: string; label: string; status: string };
 
 export function RankingView({
   isAdmin = false,
@@ -327,33 +365,186 @@ export function RankingView({
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<RankingEntry | null>(null);
   const [showChampion, setShowChampion] = useState(showChampionPopup);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [allCycles, setAllCycles] = useState<LiveCycle[]>([]);
+  const [isLive, setIsLive] = useState(false);
+  const [selectedCycleStatus, setSelectedCycleStatus] = useState<string>("open");
+  const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchRanking = useCallback(async (cycleId?: string) => {
-    setLoading(true);
+  // Fetch live ranking for any cycle
+  const fetchLiveForCycle = useCallback(async (cycleId?: string) => {
+    try {
+      const url = cycleId
+        ? `/api/ranking/live?cycleId=${cycleId}`
+        : "/api/ranking/live";
+      const res = await fetch(url);
+      const result = await res.json();
+
+      if (result.cycles?.length > 0) {
+        setAllCycles(result.cycles);
+      }
+
+      if (result.live && result.ranking.length > 0) {
+        setData({
+          cycles: result.cycles ?? [],
+          currentCycleId: result.cycleId,
+          currentCycleLabel: result.cycleLabel,
+          ibovReturn: result.ibovReturn ?? 0,
+          ranking: result.ranking,
+          stockPrices: result.stockPrices ?? {},
+          live: true,
+          updatedAt: result.updatedAt,
+        });
+        setSelectedCycleId(result.cycleId);
+        setUpdatedAt(result.updatedAt);
+        setIsLive(true);
+
+        // Track status of the selected cycle
+        const cycleStatus = result.cycles?.find(
+          (c: LiveCycle) => c.id === result.cycleId
+        )?.status ?? "open";
+        setSelectedCycleStatus(cycleStatus);
+
+        return true;
+      }
+
+      setData(null);
+      return false;
+    } catch {
+      console.error("Failed to fetch live ranking");
+      return false;
+    }
+  }, []);
+
+  // Fetch liquidated (final) ranking for a cycle
+  const fetchFinalRanking = useCallback(async (cycleId?: string) => {
     try {
       const url = cycleId
         ? `/api/ranking?cycleId=${cycleId}`
         : "/api/ranking";
       const res = await fetch(url);
       const result = await res.json();
-      setData(result);
-      if (!cycleId && result.currentCycleId) {
+
+      if (result.ranking?.length > 0) {
+        setData({
+          ...result,
+          live: false,
+          updatedAt: undefined,
+        });
         setSelectedCycleId(result.currentCycleId);
+        setUpdatedAt(null);
+        setIsLive(false);
+        return true;
       }
+      return false;
     } catch {
-      console.error("Failed to fetch ranking");
-    } finally {
-      setLoading(false);
+      console.error("Failed to fetch final ranking");
+      return false;
     }
   }, []);
 
+  // Initial load: open cycle → live, liquidated → final (default)
+  const fetchRanking = useCallback(async () => {
+    setLoading(true);
+    try {
+      // First get cycle list via live endpoint
+      const liveRes = await fetch("/api/ranking/live");
+      const liveData = await liveRes.json();
+
+      if (liveData.cycles?.length > 0) {
+        setAllCycles(liveData.cycles);
+      }
+
+      // Default cycle: first non-liquidated, or most recent
+      const defaultCycle = liveData.cycles?.find(
+        (c: LiveCycle) => c.status !== "liquidated"
+      ) ?? liveData.cycles?.[0];
+
+      if (!defaultCycle) {
+        setData(null);
+        return;
+      }
+
+      setSelectedCycleStatus(defaultCycle.status);
+
+      if (defaultCycle.status !== "liquidated") {
+        // Open cycle → always live
+        if (liveData.live && liveData.ranking?.length > 0) {
+          setData({
+            cycles: liveData.cycles ?? [],
+            currentCycleId: liveData.cycleId,
+            currentCycleLabel: liveData.cycleLabel,
+            ibovReturn: liveData.ibovReturn ?? 0,
+            ranking: liveData.ranking,
+            stockPrices: liveData.stockPrices ?? {},
+            live: true,
+            updatedAt: liveData.updatedAt,
+          });
+          setSelectedCycleId(liveData.cycleId);
+          setUpdatedAt(liveData.updatedAt);
+          setIsLive(true);
+        }
+      } else {
+        // Liquidated cycle → show final by default
+        await fetchFinalRanking(defaultCycle.id);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFinalRanking]);
+
+  // Initial fetch
   useEffect(() => {
     fetchRanking();
+    return () => {
+      if (refreshTimer.current) clearInterval(refreshTimer.current);
+    };
   }, [fetchRanking]);
 
+  // Auto-refresh when in live mode
+  useEffect(() => {
+    if (refreshTimer.current) clearInterval(refreshTimer.current);
+
+    if (isLive) {
+      refreshTimer.current = setInterval(() => {
+        fetchLiveForCycle(selectedCycleId ?? undefined);
+      }, LIVE_REFRESH_INTERVAL);
+    }
+
+    return () => {
+      if (refreshTimer.current) clearInterval(refreshTimer.current);
+    };
+  }, [isLive, selectedCycleId, fetchLiveForCycle]);
+
+  // Change cycle
   function handleCycleChange(cycleId: string) {
+    const cycle = allCycles.find((c) => c.id === cycleId);
     setSelectedCycleId(cycleId);
-    fetchRanking(cycleId);
+    setSelectedCycleStatus(cycle?.status ?? "open");
+    setLoading(true);
+
+    if (cycle?.status !== "liquidated") {
+      // Open/closed cycle → always live
+      fetchLiveForCycle(cycleId).finally(() => setLoading(false));
+    } else {
+      // Liquidated cycle → show final by default
+      setIsLive(false);
+      fetchFinalRanking(cycleId).finally(() => setLoading(false));
+    }
+  }
+
+  // Toggle live/final for liquidated cycles
+  function handleToggleLive() {
+    if (!selectedCycleId) return;
+    setLoading(true);
+
+    if (isLive) {
+      // Switch to final
+      fetchFinalRanking(selectedCycleId).finally(() => setLoading(false));
+    } else {
+      // Switch to live
+      fetchLiveForCycle(selectedCycleId).finally(() => setLoading(false));
+    }
   }
 
   if (loading) {
@@ -373,7 +564,7 @@ export function RankingView({
           Ranking em breve
         </h3>
         <p className="mt-2 text-sm text-[#9CA3AF] max-w-md mx-auto">
-          O ranking aparecerá após a liquidação do primeiro ciclo.
+          O ranking aparecerá quando houver carteiras submetidas no ciclo atual.
         </p>
       </div>
     );
@@ -398,7 +589,7 @@ export function RankingView({
             </div>
             <div className="flex-1">
               <p className="text-[10px] text-[#C6AD7C] uppercase tracking-wider font-medium">
-                Campeão — {data.currentCycleLabel}
+                Campeão --- {data.currentCycleLabel}
               </p>
               <p className="font-heading text-lg font-bold text-[#1A1A1A]">
                 {champion.name}
@@ -427,30 +618,71 @@ export function RankingView({
         </div>
       )}
 
-      {/* Month selector */}
-      {data.cycles.length > 1 && (
-        <div className="mb-5 flex items-center gap-3">
-          <span className="text-xs text-[#9CA3AF] uppercase tracking-wider">
-            Período
-          </span>
-          <div className="relative">
-            <select
-              value={selectedCycleId ?? ""}
-              onChange={(e) => handleCycleChange(e.target.value)}
-              className="appearance-none rounded-xl border border-[#E8E6E1] bg-white pl-4 pr-10 py-2.5 text-sm font-medium text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] cursor-pointer"
-            >
-              {data.cycles.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF] pointer-events-none" />
+      {/* Controls: badge + cycle selector + live toggle */}
+      <div className="mb-5 flex items-center gap-3 flex-wrap">
+        {/* Status badge */}
+        {isLive ? (
+          <LiveBadge updatedAt={updatedAt ?? undefined} />
+        ) : (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#1A1A1A]/5 px-2.5 py-1">
+            <Trophy className="h-3 w-3 text-[#C6AD7C]" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#1A1A1A]">
+              Resultado final
+            </span>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Ranking card (downloadable — always desktop layout) ─────────── */}
+        {/* Live/Final toggle for liquidated cycles */}
+        {selectedCycleStatus === "liquidated" && (
+          <button
+            onClick={handleToggleLive}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors cursor-pointer",
+              isLive
+                ? "border-[#C6AD7C]/30 text-[#C6AD7C] hover:bg-[#C6AD7C]/5"
+                : "border-[#16A34A]/30 text-[#16A34A] hover:bg-[#16A34A]/5"
+            )}
+          >
+            {isLive ? (
+              <>
+                <Trophy className="h-3 w-3" />
+                Ver fechamento
+              </>
+            ) : (
+              <>
+                <Radio className="h-3 w-3" />
+                Ver ao vivo
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Cycle selector */}
+        {allCycles.length > 1 && (
+          <>
+            <span className="text-[#E8E6E1]">|</span>
+            <span className="text-xs text-[#9CA3AF] uppercase tracking-wider">
+              Período
+            </span>
+            <div className="relative">
+              <select
+                value={selectedCycleId ?? ""}
+                onChange={(e) => handleCycleChange(e.target.value)}
+                className="appearance-none rounded-xl border border-[#E8E6E1] bg-white pl-4 pr-10 py-2.5 text-sm font-medium text-[#1A1A1A] outline-none transition-colors focus:border-[#C6AD7C] cursor-pointer"
+              >
+                {allCycles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF] pointer-events-none" />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* -- Ranking card (downloadable --- always desktop layout) ----------- */}
       <div
         id="ranking-card"
         className="overflow-hidden rounded-2xl border border-[#E8E6E1] bg-white"
@@ -462,13 +694,21 @@ export function RankingView({
             <span className="text-sm font-semibold text-white">
               Ranking {data.currentCycleLabel}
             </span>
+            {isLive && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#16A34A]/20 px-2 py-0.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-[#16A34A]">
+                  Ao vivo
+                </span>
+              </span>
+            )}
           </div>
           <span className="text-[10px] text-white/40 uppercase tracking-widest">
             Harven Finance
           </span>
         </div>
 
-        {/* Desktop table — always rendered (hidden on mobile screen, visible for download) */}
+        {/* Desktop table --- always rendered (hidden on mobile screen, visible for download) */}
         <div className="hidden md:block">
           <RankingTable data={data} isAdmin={isAdmin} onSelect={setSelectedEntry} />
         </div>
@@ -477,6 +717,11 @@ export function RankingView({
         <div className="bg-[#FAFAF8] border-t border-[#E8E6E1] px-6 py-3 flex items-center justify-between">
           <p className="text-[10px] text-[#9CA3AF]">
             IBOV: {formatPercent(data.ibovReturn)} · Peso igual (10% cada)
+            {updatedAt && (
+              <span className="ml-2">
+                · Atualizado {formatTime(updatedAt)}
+              </span>
+            )}
           </p>
           <p className="text-[10px] text-[#9CA3AF]">
             Harven Finance · Desafio Carteiras
@@ -484,13 +729,15 @@ export function RankingView({
         </div>
       </div>
 
-      {/* ── Mobile cards (screen only, outside ranking-card) ───────────── */}
+      {/* -- Mobile cards (screen only, outside ranking-card) --------------- */}
       <div className="block md:hidden overflow-hidden rounded-2xl border border-[#E8E6E1] bg-white -mt-[1px]">
         <MobileRankingCards data={data} onSelect={setSelectedEntry} />
       </div>
 
       <p className="mt-3 text-center text-[10px] text-[#D9D7D2]">
-        Clique em um participante para ver a carteira completa
+        {isLive
+          ? "Ranking baseado em cotações em tempo real · Resultado oficial na liquidação mensal"
+          : "Resultado oficial da liquidação · Clique em um participante para ver a carteira"}
       </p>
 
       {/* Portfolio modal */}
