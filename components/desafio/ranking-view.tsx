@@ -25,6 +25,8 @@ type RankingEntry = {
   allocationModel: number;
   allocationLabel: string;
   stocks: string[];
+  replicated?: boolean;
+  replicatedFrom?: string | null;
 };
 
 type Cycle = { id: string; label: string };
@@ -237,6 +239,11 @@ function RankingTable({
                 <p className="text-[10px] text-[#9CA3AF] mt-0.5">
                   {entry.curso}
                   {entry.sala ? ` · Sala ${entry.sala}` : ""}
+                  {entry.replicated && (
+                    <span className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-[#F59E0B]/10 px-1 py-px text-[9px] text-[#F59E0B] font-medium" title={`Carteira de ${entry.replicatedFrom}`}>
+                      ↺ {entry.replicatedFrom}
+                    </span>
+                  )}
                 </p>
               </td>
               {isAdmin && (
@@ -330,6 +337,11 @@ function MobileRankingCards({
                 )}
               >
                 {entry.name}
+                {entry.replicated && (
+                  <span className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-[#F59E0B]/10 px-1 py-px text-[9px] text-[#F59E0B] font-medium align-middle">
+                    ↺
+                  </span>
+                )}
               </p>
               <div className="flex items-center gap-2 mt-0.5">
                 <ReturnBadge value={entry.returnMonth} />

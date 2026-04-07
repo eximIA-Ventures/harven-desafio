@@ -109,7 +109,66 @@ async function calculateLiveRanking(cycle: {
     with: { user: true, stocks: true },
   });
 
-  if (portfolios.length === 0) {
+  // Find users who participated before but not in this cycle — carry forward
+  const currentUserIds = new Set(portfolios.map((p) => p.userId));
+
+  // Get the most recent previous cycle
+  const prevCycles = await db.query.cycles.findMany({
+    orderBy: [desc(schema.cycles.year), desc(schema.cycles.month)],
+  });
+  const prevCycle = prevCycles.find(
+    (c) =>
+      c.id !== cycle.id &&
+      (c.year < cycle.year ||
+        (c.year === cycle.year && c.month < cycle.month))
+  );
+
+  // Replicated portfolios from previous cycle
+  type ReplicatedPortfolio = {
+    userId: string;
+    user: { name: string; curso: string | null; sala: string | null };
+    allocationModel: number;
+    stocks: { ticker: string; position: number }[];
+    replicated: true;
+    replicatedFrom: string;
+  };
+
+  const replicatedPortfolios: ReplicatedPortfolio[] = [];
+
+  if (prevCycle) {
+    const prevPortfolios = await db.query.portfolios.findMany({
+      where: eq(schema.portfolios.cycleId, prevCycle.id),
+      with: { user: true, stocks: true },
+    });
+
+    for (const prev of prevPortfolios) {
+      if (!currentUserIds.has(prev.userId) && prev.stocks.length > 0) {
+        replicatedPortfolios.push({
+          userId: prev.userId,
+          user: prev.user,
+          allocationModel: prev.allocationModel,
+          stocks: prev.stocks,
+          replicated: true,
+          replicatedFrom: prevCycle.label,
+        });
+      }
+    }
+  }
+
+  // Combine: current portfolios + replicated
+  const allEntries = [
+    ...portfolios.map((p) => ({
+      userId: p.userId,
+      user: p.user,
+      allocationModel: p.allocationModel,
+      stocks: p.stocks,
+      replicated: false as const,
+      replicatedFrom: null as string | null,
+    })),
+    ...replicatedPortfolios,
+  ];
+
+  if (allEntries.length === 0) {
     return {
       cycleId: cycle.id,
       cycleLabel: cycle.label,
@@ -122,7 +181,7 @@ async function calculateLiveRanking(cycle: {
 
   // Collect all unique tickers
   const allTickers = [
-    ...new Set(portfolios.flatMap((p) => p.stocks.map((s) => s.ticker))),
+    ...new Set(allEntries.flatMap((p) => p.stocks.map((s) => s.ticker))),
   ];
 
   // Fetch everything in parallel
@@ -134,12 +193,12 @@ async function calculateLiveRanking(cycle: {
   ]);
 
   // Calculate live return for each portfolio
-  const ranked = portfolios
-    .map((portfolio) => {
+  const ranked = allEntries
+    .map((entry) => {
       let stockReturn = 0;
       let stockCount = 0;
 
-      for (const stock of portfolio.stocks) {
+      for (const stock of entry.stocks) {
         const ref = refPrices[stock.ticker];
         const live = livePrices[stock.ticker];
 
@@ -152,7 +211,7 @@ async function calculateLiveRanking(cycle: {
       const avgStockReturn = stockCount > 0 ? stockReturn / stockCount : 0;
 
       const weights =
-        ALLOCATION_WEIGHTS[portfolio.allocationModel] ?? ALLOCATION_WEIGHTS[4];
+        ALLOCATION_WEIGHTS[entry.allocationModel] ?? ALLOCATION_WEIGHTS[4];
       let totalReturn = (weights.acoes ?? 1) * avgStockReturn;
 
       for (const [key, weight] of Object.entries(weights)) {
@@ -161,16 +220,18 @@ async function calculateLiveRanking(cycle: {
       }
 
       return {
-        userId: portfolio.userId,
-        name: portfolio.user.name,
-        curso: portfolio.user.curso,
-        sala: portfolio.user.sala,
-        allocationModel: portfolio.allocationModel,
-        allocationLabel: modelLabels[portfolio.allocationModel] ?? "---",
+        userId: entry.userId,
+        name: entry.user.name,
+        curso: entry.user.curso,
+        sala: entry.user.sala,
+        allocationModel: entry.allocationModel,
+        allocationLabel: modelLabels[entry.allocationModel] ?? "---",
         returnMonth: totalReturn,
-        stocks: portfolio.stocks
+        stocks: [...entry.stocks]
           .sort((a, b) => a.position - b.position)
           .map((s) => s.ticker),
+        replicated: entry.replicated,
+        replicatedFrom: entry.replicatedFrom,
       };
     })
     .sort((a, b) => b.returnMonth - a.returnMonth)
